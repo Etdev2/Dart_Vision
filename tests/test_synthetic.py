@@ -330,3 +330,73 @@ def test_cli_writes_a_manifest_previews_and_a_summary(tmp_path):
     assert len(list((tmp_path / "previews").glob("*.svg"))) == 3
     summary = json.loads((tmp_path / "summary.json").read_text())
     assert summary["images"] == 10 and summary["sessions"] == 2
+
+
+# --------------------------------------------------------------------------
+# Framing: focal is derived so the rings carry enough pixels
+# --------------------------------------------------------------------------
+
+def test_focal_is_derived_so_the_board_fills_the_requested_fraction():
+    from dartvision.geometry.board import BDO_BOARD
+    from dartvision.synthetic import focal_for_board_fill
+
+    image_size = (1200, 1600)
+    for fill in (0.5, 0.8, 0.92):
+        for distance in (1200.0, 2400.0, 3200.0):
+            focal = focal_for_board_fill(distance, fill, image_size)
+            span_px = 2 * BDO_BOARD.r_board * focal / distance
+            assert span_px == pytest.approx(fill * min(image_size))
+
+
+def test_board_fill_is_validated():
+    from dartvision.synthetic import focal_for_board_fill
+
+    for bad in (0.0, -0.1, 1.5):
+        with pytest.raises(ValueError, match="board_fill"):
+            focal_for_board_fill(2000.0, bad, (1200, 1600))
+
+
+def test_sampled_poses_clear_the_precision_budget(rng):
+    """#15 puts the rings at 10-20px; the first real render came in at ~7."""
+    for _ in range(200):
+        scene = build_scene(sample_pose(rng), [], image_id="x")
+        assert scene.nominal_ring_width_px >= 12.0
+
+
+def test_ring_width_scales_with_focal_not_distance_alone():
+    """Doubling distance at a fixed board fill leaves the rings unchanged."""
+    from dartvision.synthetic import focal_for_board_fill, nominal_ring_width_px
+
+    widths = []
+    for distance in (1200.0, 2400.0):
+        pose = CameraPose(
+            elevation_deg=45.0, distance_mm=distance,
+            focal_px=focal_for_board_fill(distance, 0.8, (1200, 1600)),
+        )
+        widths.append(nominal_ring_width_px(pose))
+    assert widths[0] == pytest.approx(widths[1])
+
+
+def test_dataset_enforces_the_ring_width_floor(rng):
+    from dartvision.synthetic.dataset import DatasetSpec, generate_dataset, summarize
+
+    spec = DatasetSpec(setups=1, sessions_per_setup=2, images_per_session=6, min_ring_px=15.0)
+    scenes = list(generate_dataset(rng, spec))
+    for scene in scenes:
+        assert scene.nominal_ring_width_px >= 15.0
+    assert summarize(scenes)["ring_px_min"] >= 15.0
+
+
+def test_an_impossible_ring_demand_fails_loudly(rng):
+    from dartvision.synthetic.dataset import DatasetSpec, generate_dataset
+
+    spec = DatasetSpec(setups=1, sessions_per_setup=1, images_per_session=1, min_ring_px=500.0)
+    with pytest.raises(RuntimeError, match="ring width"):
+        list(generate_dataset(rng, spec))
+
+
+def test_min_ring_px_is_validated():
+    from dartvision.synthetic.dataset import DatasetSpec
+
+    with pytest.raises(ValueError, match="min_ring_px"):
+        DatasetSpec(min_ring_px=0.0)

@@ -57,7 +57,7 @@ Generate a scene manifest for a renderer to consume:
 python -m dartvision.synthetic.generate --out data/synthetic --setups 3 --sessions 4 --images 40
 ```
 
-301 tests.
+308 tests.
 
 ```bash
 pip install -e '.[dev]' && pytest

@@ -27,6 +27,8 @@ from dartvision.geometry.camera import CameraPose, board_to_image_matrix, projec
 
 __all__ = [
     "PoseRanges",
+    "focal_for_board_fill",
+    "nominal_ring_width_px",
     "sample_pose",
     "sample_tip_uniform",
     "sample_tip_near_boundary",
@@ -42,15 +44,25 @@ Point = tuple[float, float]
 class PoseRanges:
     """Inclusive ranges the pose sampler draws from.
 
-    Defaults span a plausible envelope for a phone watching a board: from a
-    steep mount down to a low grazing view, and near enough that the board
-    fills a useful share of the frame.
+    Focal length is **derived, not sampled**. What matters is how much of the
+    frame the board occupies, because that is what sets the pixel width of the
+    scoring rings -- and #15's precision budget is denominated in exactly that.
+    Sampling focal length and distance independently produces framings where
+    the board is a small object in a large empty frame, which is what the first
+    real render revealed: a 10 mm ring landing on ~7 px, already under budget
+    before the model makes an error.
+
+    ``board_fill`` is the fraction of the shorter image side spanned by the
+    board's full diameter. Values near 0.8 correspond to what a preprocessing
+    crop produces -- DeepDarts cropped to 800x800 around the board (#13), and
+    any sane pipeline does the same, so the generator should render the
+    post-crop view rather than the raw phone frame.
     """
 
     elevation_deg: tuple[float, float] = (8.0, 75.0)
     azimuth_deg: tuple[float, float] = (0.0, 360.0)
     distance_mm: tuple[float, float] = (1200.0, 3200.0)
-    focal_px: tuple[float, float] = (1000.0, 2000.0)
+    board_fill: tuple[float, float] = (0.60, 0.92)
     roll_deg: tuple[float, float] = (-12.0, 12.0)
     image_size: tuple[int, int] = (1200, 1600)
 
@@ -60,12 +72,40 @@ def _uniform(rng: np.random.Generator, span: tuple[float, float]) -> float:
     return float(rng.uniform(low, high))
 
 
-def sample_pose(rng: np.random.Generator, ranges: PoseRanges = PoseRanges()) -> CameraPose:
+def focal_for_board_fill(
+    distance_mm: float,
+    board_fill: float,
+    image_size: tuple[int, int],
+    board: BoardSpec = BDO_BOARD,
+) -> float:
+    """Focal length in pixels that makes the board span ``board_fill`` of the frame."""
+    if not 0.0 < board_fill <= 1.0:
+        raise ValueError("board_fill must be in (0, 1]")
+    return board_fill * min(image_size) * distance_mm / (2.0 * board.r_board)
+
+
+def nominal_ring_width_px(pose: CameraPose, board: BoardSpec = BDO_BOARD) -> float:
+    """Pixel width of the double/treble ring, viewed face-on.
+
+    The number #15's precision budget is about. An oblique view compresses this
+    along one axis, so treat it as the best case at a given framing.
+    """
+    return board.ring_width * pose.focal_px / pose.distance_mm
+
+
+def sample_pose(
+    rng: np.random.Generator,
+    ranges: PoseRanges = PoseRanges(),
+    board: BoardSpec = BDO_BOARD,
+) -> CameraPose:
+    distance_mm = _uniform(rng, ranges.distance_mm)
     return CameraPose(
         elevation_deg=_uniform(rng, ranges.elevation_deg),
         azimuth_deg=_uniform(rng, ranges.azimuth_deg),
-        distance_mm=_uniform(rng, ranges.distance_mm),
-        focal_px=_uniform(rng, ranges.focal_px),
+        distance_mm=distance_mm,
+        focal_px=focal_for_board_fill(
+            distance_mm, _uniform(rng, ranges.board_fill), ranges.image_size, board
+        ),
         roll_deg=_uniform(rng, ranges.roll_deg),
         image_size=ranges.image_size,
     )
@@ -160,6 +200,11 @@ class Scene:
     tips_mm: tuple[Point, ...]
     annotation: Annotation
     landmarks_visible: bool
+
+    @property
+    def nominal_ring_width_px(self) -> float:
+        """Face-on pixel width of the scoring rings. See #15's precision budget."""
+        return nominal_ring_width_px(self.pose)
 
     @property
     def board_coverage(self) -> float:

@@ -53,7 +53,8 @@ class DatasetSpec:
     sessions_per_setup: int = 4
     images_per_session: int = 50
 
-    min_board_coverage: float = 0.12
+    min_board_coverage: float = 0.10
+    min_ring_px: float = 12.0
     near_boundary_fraction: float = 0.35
     cluster_fraction: float = 0.20
     empty_fraction: float = 0.05
@@ -69,6 +70,8 @@ class DatasetSpec:
             raise ValueError("placement fractions must sum to at most 1.0")
         if not 0.0 <= self.min_board_coverage < 1.0:
             raise ValueError("min_board_coverage must be in [0, 1)")
+        if self.min_ring_px <= 0:
+            raise ValueError("min_ring_px must be positive")
         if self.landmark_count not in (4, 8):
             raise ValueError("landmark_count must be 4 or 8")
 
@@ -84,23 +87,28 @@ def _usable_pose(
     board: BoardSpec,
     max_attempts: int = 200,
 ):
-    """Draw a pose whose board is fully in frame and large enough to learn from.
+    """Draw a pose whose board is in frame and carries enough pixels to learn from.
 
-    A board occupying a sliver of the frame carries no recoverable precision,
-    however exact its labels: #15's budget puts the treble ring at 10-20 px at
-    *good* framing, so a low-coverage scene is unlearnable rather than merely
-    hard.
+    Gated on **ring width in pixels**, not just frame coverage. #15's budget is
+    denominated in the pixel width of the 10 mm double/treble rings, since that
+    is what decides whether a multiplier can be resolved at all; a scene below
+    it is unlearnable however exact its labels.
     """
     for _ in range(max_attempts):
-        pose = sample_pose(rng, ranges)
+        pose = sample_pose(rng, ranges, board)
         probe = build_scene(
             pose, [], image_id="probe", landmark_count=spec.landmark_count, board=board
         )
-        if probe.landmarks_visible and probe.board_coverage >= spec.min_board_coverage:
+        if (
+            probe.landmarks_visible
+            and probe.board_coverage >= spec.min_board_coverage
+            and probe.nominal_ring_width_px >= spec.min_ring_px
+        ):
             return pose
     raise RuntimeError(
-        f"no pose met coverage >= {spec.min_board_coverage} in {max_attempts} attempts; "
-        "loosen PoseRanges or lower min_board_coverage"
+        f"no pose met coverage >= {spec.min_board_coverage} and ring width >= "
+        f"{spec.min_ring_px}px in {max_attempts} attempts; loosen PoseRanges or "
+        "lower the thresholds"
     )
 
 
@@ -164,6 +172,7 @@ def summarize(scenes: list[Scene]) -> dict[str, object]:
         darts[n] = darts.get(n, 0) + 1
 
     coverages = sorted(s.board_coverage for s in scenes)
+    rings = sorted(s.nominal_ring_width_px for s in scenes)
     return {
         "images": len(scenes),
         "setups": len({s.annotation.setup_id for s in scenes}),
@@ -173,4 +182,7 @@ def summarize(scenes: list[Scene]) -> dict[str, object]:
         "board_coverage_min": round(coverages[0], 3),
         "board_coverage_median": round(coverages[len(coverages) // 2], 3),
         "board_coverage_max": round(coverages[-1], 3),
+        "ring_px_min": round(rings[0], 1),
+        "ring_px_median": round(rings[len(rings) // 2], 1),
+        "ring_px_max": round(rings[-1], 1),
     }
