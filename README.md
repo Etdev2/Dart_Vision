@@ -25,6 +25,14 @@ The vision model is planned as a standalone, versioned AI engine rather than tra
 - **Alternative dart data sources (#24):** [`docs/research/24-alternative-dart-data-sources.md`](./docs/research/24-alternative-dart-data-sources.md)
 - **DeepDarts rights enquiry draft (#23):** [`docs/research/23-mcnally-enquiry-draft.md`](./docs/research/23-mcnally-enquiry-draft.md)
 
+## Getting started
+
+**[`docs/runbook.md`](./docs/runbook.md)** — day-one sequence from clone to a rendered dataset.
+
+```bash
+pip install -e '.[dev]' && pytest && python -m dartvision.doctor
+```
+
 ## Code
 
 First implementation, on the `prototype/` track for #17:
