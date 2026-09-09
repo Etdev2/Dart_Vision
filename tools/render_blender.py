@@ -166,8 +166,13 @@ def build_board(board: BoardSpec, style: str) -> None:
         bpy.context.object.data.materials.append(wire_mat)
 
 
-def add_dart(tip_mm, index: int, rng) -> None:
-    """A dart whose point sits exactly on the annotated board coordinate."""
+def add_dart(tip_mm, index: int, rng) -> list:
+    """A dart whose point sits exactly on the annotated board coordinate.
+
+    Returns the objects created, so a scene can drop its darts and keep the
+    board rather than rebuilding a hundred-odd meshes for the next frame.
+    """
+    created = []
     x, y = tip_mm[0] / MM_PER_METRE, tip_mm[1] / MM_PER_METRE
     barrel_mat = make_material(f"barrel-{index}", (0.34, 0.34, 0.36, 1.0), 0.3, metallic=1.0)
     flight_mat = make_material(f"flight-{index}", (0.75, 0.12, 0.12, 1.0), 0.8)
@@ -187,6 +192,7 @@ def add_dart(tip_mm, index: int, rng) -> None:
         obj.rotation_mode = "QUATERNION"
         obj.rotation_quaternion = axis.to_track_quat("Z", "Y")
         obj.data.materials.append(material)
+        created.append(obj)
 
     flight_centre = Vector((x, y, 0.0)) + axis * (point_len + barrel_len + 0.012)
     bpy.ops.mesh.primitive_cube_add(size=0.024, location=flight_centre)
@@ -195,6 +201,16 @@ def add_dart(tip_mm, index: int, rng) -> None:
     flight.rotation_mode = "QUATERNION"
     flight.rotation_quaternion = axis.to_track_quat("Z", "Y")
     flight.data.materials.append(flight_mat)
+    created.append(flight)
+    return created
+
+
+def remove_objects(objects) -> None:
+    for obj in objects:
+        try:
+            bpy.data.objects.remove(obj, do_unlink=True)
+        except (ReferenceError, RuntimeError):
+            pass
 
 
 def add_lighting(style: str, rng) -> None:
@@ -383,6 +399,10 @@ def main() -> int:
     rng = random.Random(args.seed)
     worst_overall = 0.0
     resolved_engine = args.engine
+    current_session: tuple | None = None
+    camera = None
+    dart_objects: list = []
+    sessions_built = 0
 
     for index, annotation in enumerate(annotations, start=1):
         meta = annotation.meta
@@ -395,8 +415,24 @@ def main() -> int:
             image_size=tuple(annotation.image_size),
         )
 
-        clear_scene()
-        build_board(BDO_BOARD, str(meta.get("board_style", "classic-black")))
+        # The board and camera are fixed within a session -- the same property
+        # that lets #26 annotate landmarks once per session. Rebuilding a
+        # hundred-odd meshes per frame throws that away, so only rebuild when
+        # the session actually changes.
+        session_key = (annotation.session_id, str(meta.get("board_style", "")),
+                       str(meta.get("lighting", "")), pose)
+        if session_key != current_session:
+            clear_scene()
+            build_board(BDO_BOARD, str(meta.get("board_style", "classic-black")))
+            add_lighting(str(meta.get("lighting", "daylight-soft")), rng)
+            camera = setup_camera(pose)
+            resolved_engine = configure_render(args.engine, args.samples, annotation.image_size)
+            current_session = session_key
+            dart_objects = []
+            sessions_built += 1
+
+        remove_objects(dart_objects)
+        dart_objects = []
 
         width, height = annotation.image_size
         for tip_index, (nx, ny) in enumerate(annotation.tips):
@@ -406,11 +442,9 @@ def main() -> int:
             board_pt = estimate_homography(annotation.landmarks).to_board(
                 [(nx, ny)]
             )[0]
-            add_dart((float(board_pt[0]), float(board_pt[1])), tip_index, rng)
-
-        add_lighting(str(meta.get("lighting", "daylight-soft")), rng)
-        camera = setup_camera(pose)
-        resolved_engine = configure_render(args.engine, args.samples, (width, height))
+            dart_objects += add_dart(
+                (float(board_pt[0]), float(board_pt[1])), tip_index, rng
+            )
 
         worst_overall = max(worst_overall, verify_labels(camera, annotation, BDO_BOARD, args.tolerance_px))
 
@@ -429,6 +463,7 @@ def main() -> int:
         "worst_label_error_px": round(worst_overall, 4),
         "engine": resolved_engine,
         "blender": bpy.app.version_string,
+        "sessions_built": sessions_built,
     }, indent=2))
     return 0
 
