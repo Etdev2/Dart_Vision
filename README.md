@@ -25,6 +25,16 @@ The vision model is planned as a standalone, versioned AI engine rather than tra
 - **Alternative dart data sources (#24):** [`docs/research/24-alternative-dart-data-sources.md`](./docs/research/24-alternative-dart-data-sources.md)
 - **DeepDarts rights enquiry draft (#23):** [`docs/research/23-mcnally-enquiry-draft.md`](./docs/research/23-mcnally-enquiry-draft.md)
 
+## Code
+
+First implementation, on the `prototype/` track for #17:
+
+- `src/dartvision/geometry/` — deterministic board geometry and scoring. Clean-room from published BDO dimensions, standard library only, 33 tests.
+
+```bash
+pip install -e '.[dev]' && pytest
+```
+
 ## Core idea
 
 ```text
