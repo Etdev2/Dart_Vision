@@ -51,7 +51,37 @@ None of these is authoritative. **Do not record a licence for the data until the
 | `models.zip` | Pretrained TF checkpoints (`deepdarts_d1`, `deepdarts_d2`) + `yolov4-tiny.h5` init | Derivative of unlicensed code |
 | `dataset/labels.pkl` | Annotations (in the git repo, not the DataPort archive) | Pandas pickle, keyed by `img_folder` |
 
-**Scale (secondary sources, to confirm against the paper):** ~16,050 images containing ~32,027 darts, across two setups — **D1 ≈ 15,000** images (smartphone, face-on, one board) and **D2 ≈ 1,050** images (DSLR on tripod, varied angles, a second board).
+**Scale — now confirmed from the paper abstract (via the IEEE DataPort record):**
+
+| | D1 | D2 |
+| --- | --- | --- |
+| Images | ~15,000 | ~1,050 total, **830 training** |
+| Capture | Smartphone, **face-on** | Various camera angles |
+| Setup | Board setup A | Board setup B |
+| Method | Trained from scratch | Transfer from D1 + extensive augmentation |
+| **Reported test accuracy** | **94.7%** | **84.0%** |
+
+Total ~16,050 images across the two setups (~32,027 darts, per secondary sources). The paper states "the code and datasets are available" — an availability statement, **not** a licence grant.
+
+### 3.1 What those accuracy numbers mean for the product
+
+The reported metric is **per-image total-score accuracy** — an image holds a whole throw state (up to 3 darts), so 94.7% means roughly **1 in 19 turns scored wrong**, and 84.0% means roughly **1 in 6**.
+
+Compounded over a 501 leg of ~12 visits per player:
+
+| Condition | Per-turn accuracy | Chance of an error-free leg |
+| --- | --- | --- |
+| D1 — face-on, **board already seen in training** | 94.7% | **~52%** |
+| D2 — varied angles, seen board | 84.0% | **~12%** |
+
+So even the flattering number means about **half of all legs contain at least one scoring error**, and that is measured on a board the model trained on. Unseen boards will be worse by an unknown margin (see §5.1).
+
+Two conclusions:
+
+1. **Correction UX is not a safety net, it is a core feature.** At these rates a player hits a wrong score roughly once a leg. Issue #10's one-or-two-tap correction flow, and #5's decision on whether low-confidence throws auto-score or ask, are load-bearing product decisions — not polish.
+2. **The angle penalty is the headline risk.** Dropping 94.7% → 84.0% when the camera moves off-axis is the single most product-relevant number in the paper, because "mount your phone wherever" is the promise. It sharpens #2 (camera topology) and #6 (calibration UX): constraining the mounting position is a legitimate lever for buying accuracy back.
+
+*(Caveat: D2 also had far less training data (830 images), so the 94.7 → 84.0 drop confounds camera-angle difficulty with data scarcity. Both hurt us, but they have different fixes — more angled data vs. a better model — and #18/#20 should try to separate them.)*
 
 ## 4. Annotation contract — *Verified* from `dataset/annotate.py`
 
@@ -149,8 +179,8 @@ The reference model was trained with **occlusion augmentation disabled**, and wi
 
 This session's network egress policy blocks `ieee-dataport.org`, `arxiv.org`, `openaccess.thecvf.com`, and `huggingface.co`. The following could not be verified here:
 
-1. **The dataset licence and terms of use** (the gating question). Open <https://ieee-dataport.org/open-access/deepdarts-dataset> and record verbatim: the licence, any terms accepted at download, whether access needs a subscription, and the required citation.
-2. **Exact image counts, archive sizes, and D1/D2 composition** from the paper itself, to replace the secondary figures in §3.
+1. **The dataset licence and terms of use** — *still the gating question.* The DataPort record's description and load instructions have been read and contributed §3; they contain **no licence statement**. The licence lives in a separate metadata field on that page (near the file list / access box), and that field is what must be recorded verbatim, along with any terms accepted at download and whether access requires a subscription.
+2. ~~Exact image counts and D1/D2 composition~~ — **resolved**, see §3. Archive sizes on disk still unconfirmed.
 3. **Whether trained derivative weights may be used commercially** — if the licence is CC BY 4.0 this is straightforwardly yes with attribution; if it is CC BY-NC or has bespoke DataPort terms, the Brain cannot ship commercially on DeepDarts alone and #20/#22 must be re-planned around our own captured data.
 
 > Note for #22: `huggingface.co` is also blocked from this environment, so publishing the Brain will need either an egress-policy change or a different execution context.
