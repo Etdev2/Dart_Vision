@@ -69,7 +69,13 @@ That materially changes #25. The synthetic renderer does **not** need rented har
 
 Caveat on speed: Apple Silicon lacks the dedicated BVH-traversal hardware that RTX cards expose through OptiX, so Cycles is slower per frame than an equivalent NVIDIA card. For this workload that matters less than it sounds — a dartboard is simple geometry at modest resolution — and **EEVEE, a rasterizer, is dramatically faster than Cycles** and very likely sufficient. Wire specularity is the one thing worth comparing between the two before committing.
 
-Practical note: base M1 ships with 8 GB unified memory, M1 Pro/Max with 16–64 GB. Rendering is comfortable either way; the memory question only bites for training, which is rented regardless.
+**Confirmed machine: 16-inch MacBook Pro, M1.** The 16-inch was only ever sold with an **M1 Pro or M1 Max**, so this is at minimum a 14-core GPU with 16 GB unified memory, and the owner's RAM upgrade likely puts it at 32 GB.
+
+That is comfortably above the threshold where the earlier low-memory caveat applied. Consequences:
+
+- **Cycles is viable, not just EEVEE.** Use EEVEE for the bulk render and Cycles for a few hundred frames to compare wire specularity, which §7.3 flags as the one material property scoring actually depends on.
+- **Renting for rendering is probably unnecessary.** At this GPU class a simple dartboard scene at 1200×1600 in EEVEE should land well under a second per frame, putting a 20k-image render in the low hours rather than the low tens of hours.
+- **Training still rents.** Metal is not CUDA; nothing about a better Mac changes that.
 
 ### 3.4 The Mac becomes essential later, for a different reason
 
@@ -197,6 +203,11 @@ That inverts the usual advice: **renting a GPU for rendering may beat free
 laptop time.** Blender on a rented 4090 would cut a 28-hour render to a few
 hours for a couple of dollars. Free is not free when it costs a day of the
 machine you also need to work on.
+
+**Revised for the confirmed hardware (§3.3):** on an M1 Pro/Max the 2–4 s/frame
+rows are pessimistic; expect the sub-second rows, which puts a 20k render in the
+low hours. Render locally, and only reconsider renting if the corpus grows past
+what an overnight run covers or #17's measurements contradict this.
 
 Levers, in order of preference: prefer EEVEE over Cycles; let #25's Arm D curve
 say how many images are actually needed before rendering tens of thousands;
