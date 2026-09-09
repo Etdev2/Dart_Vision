@@ -89,6 +89,43 @@ Ask specifically:
 3. Is the `deep-darts` code intentionally unlicensed, or would he consider adding a permissive licence?
 4. May a curated derivative representation of the dataset be redistributed (relevant to #22)?
 
+### 2.5 Someone already asked, and got no answer in eight months
+
+`wmcnally/deep-darts` **issue #9, "License Clarification Request"**, opened 2026-01-21 by `DartsHub180`:
+
+> *"Dear Pascale & Will, I am contemplating using your system for a mobile application, however, would like to clarify licensing status and or options beforehand. Please let me know regards Chris"*
+
+**Still open. Zero comments. No maintainer reply in roughly eight months.**
+
+This is close to the identical question Dart Vision needs answered — same use case, a mobile application — and it establishes three things:
+
+1. **The ambiguity is real and externally visible.** Other prospective commercial users have hit the same wall. This is not a gap in our reading of the page.
+2. **The authors appear unresponsive on this project.** The paper is from 2021; the maintainers have almost certainly moved on. GitHub is a low-probability channel, and email may be little better.
+3. **Therefore: plan for "no answer."** Waiting is not a strategy. An unanswered licence question is functionally identical to a refusal, because the estoppel clause in §2.3 means silence grants nothing.
+
+*(Incidental but useful: "Pascale & Will" identifies co-author Pascale Walters as a second point of contact alongside William McNally.)*
+
+### 2.6 Strategic consequence: make DeepDarts optional, not foundational
+
+The right response is not a better way to chase the licence. It is to **architect so the answer stops mattering.**
+
+The inputs now support this:
+
+- **#24** — no usable second public dataset exists, so DeepDarts was never going to be sufficient on its own.
+- **#25** — synthetic generation is entirely unblocked and produces exact labels with controllable hard-case coverage.
+- **#19** — our own capture is a precondition for any defensible accuracy claim regardless of the licence outcome.
+
+So the shippable Brain should be built on **synthetic plus our own captured data**, with DeepDarts treated as a **research and benchmarking reference only** — used to sanity-check the pipeline, calibrate expectations, and compare against published numbers, never as a dependency of the artifact published in #22.
+
+| Outcome | Consequence under this strategy |
+| --- | --- |
+| Permission granted | DeepDarts becomes a **bonus** — extra training volume that improves the model. Nothing was waiting on it. |
+| Permission refused, or never answered | **Nothing is blocked.** The Brain ships on data we own. |
+
+This converts #23 from a blocker into an upside. It is strictly better than waiting, and given the eight-month precedent it is also the realistic path.
+
+Still worth sending one enquiry — the cost is a few minutes and the upside is real training volume. See [`23-mcnally-enquiry-draft.md`](./23-mcnally-enquiry-draft.md). Just do not sequence any work behind the reply.
+
 ## 3. Data manifest
 
 | Archive | Contents | Notes |

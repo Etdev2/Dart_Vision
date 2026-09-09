@@ -20,6 +20,7 @@ The vision model is planned as a standalone, versioned AI engine rather than tra
 - **Training compute & experiment stack (#16):** [`docs/research/16-training-compute-and-stack.md`](./docs/research/16-training-compute-and-stack.md)
 - **Leakage-safe benchmark design (#14):** [`docs/research/14-leakage-safe-benchmark.md`](./docs/research/14-leakage-safe-benchmark.md)
 - **Alternative dart data sources (#24):** [`docs/research/24-alternative-dart-data-sources.md`](./docs/research/24-alternative-dart-data-sources.md)
+- **DeepDarts rights enquiry draft (#23):** [`docs/research/23-mcnally-enquiry-draft.md`](./docs/research/23-mcnally-enquiry-draft.md)
 
 ## Core idea
 
