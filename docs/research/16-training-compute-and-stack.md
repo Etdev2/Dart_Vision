@@ -45,9 +45,34 @@ Colab's compute-unit model buys a *budget*, not a *reservation* — a paid tier 
 
 Colab is genuinely good for looking at data, sanity-checking annotations, and rendering predictions. Use it there.
 
-### 3.2 One open question for the product owner
+### 3.2 Local hardware: MacBook Pro — *resolved*
 
-**Do you already own a machine with a discrete NVIDIA GPU (a gaming PC counts)?** A 12 GB+ card would cover most of #17 and #18 at zero marginal cost, with rentals reserved for full runs. This materially changes the recommendation, so it is worth answering before provisioning anything.
+The product owner's machine is a **MacBook Pro**, so there is no NVIDIA GPU and no CUDA. This **confirms the rent-hourly recommendation**: local full training is not on the table.
+
+It does not make the Mac useless — it makes its role specific.
+
+| Runs on the Mac | Runs on the rented Linux/CUDA box |
+| --- | --- |
+| Writing code, configs, tests | **Every run that produces a number anyone cites** |
+| Dataset inspection, annotation review | #17 harness runs, #18 sweeps, #20 full campaign |
+| Visualizing predictions and failure cases | Anything feeding #21's ship gates |
+| Smoke tests on ~50 images (does loss go down?) | |
+| **Core ML export and on-device benchmarking** | |
+
+**Keep the split strict.** PyTorch's Apple `mps` backend is fine for smoke tests, but its numerics differ from CUDA and some operators fall back to CPU or are missing outright. Debugging on `mps` while training on CUDA is a good way to chase ghosts that do not exist on either. Rule: **the Mac authors, the rented box measures.** Same repo, same pinned container; the container only ever runs CUDA.
+
+### 3.3 The Mac becomes essential later, for a different reason
+
+Core ML conversion and real on-device iPhone latency/thermal benchmarking **require macOS**. So the MacBook is the right and necessary tool for the edge-export path — the Edge Inference Engineer's work, issue #4's runtime decision, and the export artifacts in #22. It is an asset for deployment, just not for training.
+
+### 3.4 Working loop
+
+1. Author code and configs on the Mac; commit.
+2. Push to git.
+3. Rented pod pulls the pinned container and the repo at a specific SHA, runs one config, pushes checkpoints and metrics to object storage.
+4. Pull results back to the Mac for inspection and plotting.
+
+This satisfies §6's reproducibility contract, needs no GPU on the Mac, and is directly runnable by an agent without supervision.
 
 ## 4. Framework licensing — the same trap as #13, and easy to walk into
 
@@ -116,7 +141,7 @@ For context, a single Ultralytics Enterprise Licence would very likely exceed th
 3. **Never use Ultralytics** unless someone has bought an Enterprise Licence and written it down.
 4. **Colab for looking at data, never for runs of record.**
 5. **Containerize before the first real run**, so #17's harness is reproducible from the outset rather than retrofitted.
-6. **Confirm whether a local GPU already exists** (§3.2) before spending anything.
+6. **Local hardware is a MacBook Pro** — no CUDA, so rent for all real runs; the Mac authors code and later handles Core ML export (§3.2–3.4).
 7. **Let #17 measure the real per-epoch cost** and correct §2's estimates.
 
 > Note for #22: `huggingface.co` is blocked from the current agent environment. Whichever compute is chosen must have outbound access to the Hub, or publishing needs a separate step.
