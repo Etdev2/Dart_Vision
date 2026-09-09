@@ -34,7 +34,7 @@ The real constraints are the ones #13 already surfaced: **dataset diversity** (o
 
 | Option | Cost | Verdict |
 | --- | --- | --- |
-| **Rented hourly GPU** (RunPod Community, Vast.ai) | RTX 4090 ~$0.34–0.69/hr; A100 80GB ~$1.19–1.39/hr | **Recommended.** Pay only for run time, pick your VRAM, full root access, reproducible via a pinned container. |
+| **Rented hourly GPU** (RunPod Community, Vast.ai) | RTX 4090 **$0.34/hr** RunPod Community (vs $0.69 Secure); Vast.ai spot from ~$0.11–0.39; A100 80GB ~$1.19–1.39/hr | **Recommended.** Pay only for run time, pick your VRAM, full root access, reproducible via a pinned container. |
 | **Rented, SLA-backed** (Lambda, RunPod Secure) | A100 ~$2.06/hr; H100 ~$2.69–2.99/hr | Overkill. Reserve for a final long run if one is ever needed. |
 | **Google Colab Pro / Pro+** | $9.99/mo (100 compute units) / higher tier (500 CU). A100 burns up to ~13 CU/hr | **Exploration only — not for runs of record.** |
 | **Local GPU** | Hardware capex | Only sensible above ~100 GPU-hr/month sustained. We are far below that. |
@@ -61,11 +61,21 @@ It does not make the Mac useless — it makes its role specific.
 
 **Keep the split strict.** PyTorch's Apple `mps` backend is fine for smoke tests, but its numerics differ from CUDA and some operators fall back to CPU or are missing outright. Debugging on `mps` while training on CUDA is a good way to chase ghosts that do not exist on either. Rule: **the Mac authors, the rented box measures.** Same repo, same pinned container; the container only ever runs CUDA.
 
-### 3.3 The Mac becomes essential later, for a different reason
+### 3.3 What the Mac can do *now* — including all of the rendering
+
+Confirmed September 2026: **Blender runs natively on Apple Silicon with Metal GPU acceleration.** The Cycles Metal backend arrived in Blender 3.1, EEVEE viewport support in 3.5, and GPU-accelerated ray tracing and denoising are available on Apple Silicon (macOS 13+ for full feature support).
+
+That materially changes #25. The synthetic renderer does **not** need rented hardware — it runs on the MacBook. So the entire synthetic pipeline, label generation *and* image rendering, is local and free.
+
+Caveat on speed: Apple Silicon lacks the dedicated BVH-traversal hardware that RTX cards expose through OptiX, so Cycles is slower per frame than an equivalent NVIDIA card. For this workload that matters less than it sounds — a dartboard is simple geometry at modest resolution — and **EEVEE, a rasterizer, is dramatically faster than Cycles** and very likely sufficient. Wire specularity is the one thing worth comparing between the two before committing.
+
+Practical note: base M1 ships with 8 GB unified memory, M1 Pro/Max with 16–64 GB. Rendering is comfortable either way; the memory question only bites for training, which is rented regardless.
+
+### 3.4 The Mac becomes essential later, for a different reason
 
 Core ML conversion and real on-device iPhone latency/thermal benchmarking **require macOS**. So the MacBook is the right and necessary tool for the edge-export path — the Edge Inference Engineer's work, issue #4's runtime decision, and the export artifacts in #22. It is an asset for deployment, just not for training.
 
-### 3.4 Working loop
+### 3.5 Working loop
 
 1. Author code and configs on the Mac; commit.
 2. Push to git.
@@ -141,10 +151,16 @@ For context, a single Ultralytics Enterprise Licence would very likely exceed th
 3. **Never use Ultralytics** unless someone has bought an Enterprise Licence and written it down.
 4. **Colab for looking at data, never for runs of record.**
 5. **Containerize before the first real run**, so #17's harness is reproducible from the outset rather than retrofitted.
-6. **Local hardware is a MacBook Pro** — no CUDA, so rent for all real runs; the Mac authors code and later handles Core ML export (§3.2–3.4).
+6. **Local hardware is a MacBook Pro** — no CUDA, so rent for all real runs; the Mac authors code and later handles Core ML export (§3.2–3.5).
 7. **Let #17 measure the real per-epoch cost** and correct §2's estimates.
 
 > Note for #22: `huggingface.co` is blocked from the current agent environment. Whichever compute is chosen must have outbound access to the Hub, or publishing needs a separate step.
+
+## 8.1 The real financial risk is an idle pod, not training
+
+Rented GPUs bill **for every hour the pod exists, not for hours it computes.** A 4090 left running overnight costs about $8 for nothing. Over a campaign that dwarfs the cost of the training itself.
+
+Two habits remove it: make the container exit when the run finishes rather than dropping to a shell, and check for running pods before closing the laptop. This is the mistake everyone makes exactly once.
 
 ## 9. Rates cited
 
