@@ -11,6 +11,7 @@ We are intentionally resolving the major product and architecture decisions befo
 - **Issue tracker / Wayfinder conventions:** [`docs/agents/issue-tracker.md`](./docs/agents/issue-tracker.md)
 - **Initial system hypothesis:** [`docs/architecture/initial-system-hypothesis.md`](./docs/architecture/initial-system-hypothesis.md)
 - **Data strategy decision:** [`docs/architecture/data-strategy-decision.md`](./docs/architecture/data-strategy-decision.md)
+- **Canonical throw event (#9):** [`docs/architecture/throw-event.md`](./docs/architecture/throw-event.md) — the contract between the Brain and the app, with the TypeScript definition.
 
 ## Dart Vision Brain (AI engine)
 
@@ -40,6 +41,7 @@ First implementation, on the `prototype/` track for #17:
 - `src/dartvision/geometry/board.py` — board geometry and deterministic scoring. Clean-room from published BDO dimensions, standard library only.
 - `src/dartvision/geometry/calibration.py` — calibration landmarks and the image-to-board homography.
 - `src/dartvision/data/labels.py` — the annotation contract, shared by synthetic (#25) and captured (#26) data.
+- `src/dartvision/events.py` — the canonical `ThrowEvent`, calibration status, and the confirmation policy.
 - `src/dartvision/data/splits.py` — leakage-safe splits for [#14](https://github.com/Etdev2/Dart_Vision/issues/14)'s tiers, plus a ledger enforcing holdout discipline.
 - `src/dartvision/model/targets.py` — target encoding and decoding (heatmaps, soft-argmax, sub-cell offsets). No training framework required.
 - `src/dartvision/metrics/scoring.py` — [#14](https://github.com/Etdev2/Dart_Vision/issues/14)'s metrics and [#21](https://github.com/Etdev2/Dart_Vision/issues/21)'s gates, including the risk–coverage curve and error concentration.
@@ -55,7 +57,7 @@ Generate a scene manifest for a renderer to consume:
 python -m dartvision.synthetic.generate --out data/synthetic --setups 3 --sessions 4 --images 40
 ```
 
-279 tests.
+301 tests.
 
 ```bash
 pip install -e '.[dev]' && pytest
