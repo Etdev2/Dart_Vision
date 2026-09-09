@@ -40,6 +40,8 @@ First implementation, on the `prototype/` track for #17:
 - `src/dartvision/geometry/board.py` — board geometry and deterministic scoring. Clean-room from published BDO dimensions, standard library only.
 - `src/dartvision/geometry/calibration.py` — calibration landmarks and the image-to-board homography.
 - `src/dartvision/data/labels.py` — the annotation contract, shared by synthetic (#25) and captured (#26) data.
+- `src/dartvision/data/splits.py` — leakage-safe splits for [#14](https://github.com/Etdev2/Dart_Vision/issues/14)'s tiers, plus a ledger enforcing holdout discipline.
+- `src/dartvision/model/targets.py` — target encoding and decoding (heatmaps, soft-argmax, sub-cell offsets). No training framework required.
 - `src/dartvision/metrics/scoring.py` — [#14](https://github.com/Etdev2/Dart_Vision/issues/14)'s metrics and [#21](https://github.com/Etdev2/Dart_Vision/issues/21)'s gates, including the risk–coverage curve and error concentration.
 - `src/dartvision/geometry/camera.py` — pinhole camera over the board plane.
 - `src/dartvision/annotate/` — [#26](https://github.com/Etdev2/Dart_Vision/issues/26) capture tooling: session landmark propagation, burst expansion, and placed-dart capture plans.
