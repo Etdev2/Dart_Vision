@@ -216,3 +216,46 @@ def test_different_checkpoints_and_splits_are_independent(tmp_path):
     ledger.record("ckpt-a", "split-2")
     assert ledger.reads("ckpt-a", "split-1") == 1
     assert ledger.reads("ckpt-b", "split-1") == 1
+
+
+# --------------------------------------------------------------------------
+# Tier selection
+# --------------------------------------------------------------------------
+
+def test_tier_split_is_reproducible_from_a_seed():
+    from dartvision.data.splits import split_for_tier
+
+    annotations = corpus(setups=4, sessions=3)
+    a = split_for_tier(annotations, "cross_setup", holdout_setup="setup3", seed=5)
+    b = split_for_tier(annotations, "cross_setup", holdout_setup="setup3", seed=5)
+    c = split_for_tier(annotations, "cross_setup", holdout_setup="setup3", seed=6)
+
+    assert a.digest == b.digest
+    assert a.digest != c.digest  # a different seed picks different validation
+
+
+def test_cross_setup_tier_needs_a_holdout_named():
+    from dartvision.data.splits import split_for_tier
+
+    with pytest.raises(LeakageError, match="needs a holdout_setup"):
+        split_for_tier(corpus(), "cross_setup")
+
+
+def test_unknown_tier_lists_the_valid_ones():
+    from dartvision.data.splits import split_for_tier
+
+    with pytest.raises(LeakageError, match="session, cross_setup, sim_to_real"):
+        split_for_tier(corpus(), "nonsense")
+
+
+def test_sim_to_real_tier_holds_out_every_real_session():
+    from dartvision.data.splits import split_for_tier
+
+    annotations = (
+        corpus(setups=2, origin=Origin.SYNTHETIC, prefix="synth")
+        + corpus(setups=1, prefix="real")
+    )
+    split = split_for_tier(annotations, "sim_to_real", seed=1)
+    for a in annotations:
+        if a.origin.is_real:
+            assert split.partitions[a.image_id] == "test"

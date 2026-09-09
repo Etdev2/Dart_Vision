@@ -26,12 +26,13 @@ import torch
 from torch.utils.data import DataLoader
 
 from dartvision.data.labels import Annotation, read_jsonl
+from dartvision.data.splits import split_for_tier
 from dartvision.data.torch_dataset import PhotometricJitter, SceneDataset, collate
 from dartvision.model.losses import channel_peak_mask, heatmap_focal_loss, offset_l1_loss
 from dartvision.model.net import DartVisionBrain
 from dartvision.train.config import RunManifest, TrainConfig, resolve_device
 
-__all__ = ["EpochResult", "seed_everything", "build_dataset", "train"]
+__all__ = ["EpochResult", "seed_everything", "build_dataset", "apply_split", "train"]
 
 
 @dataclass
@@ -62,6 +63,31 @@ def seed_everything(seed: int) -> None:
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+
+def apply_split(
+    config: TrainConfig, annotations: Sequence[Annotation]
+) -> tuple[list[Annotation], list[Annotation], str | None]:
+    """Partition annotations for the configured tier.
+
+    Returns ``(train, val, split_digest)``. The test partition is deliberately
+    *not* returned: training must never see it, and handing it back here would
+    make that a matter of discipline rather than of construction. Evaluation
+    rebuilds the same split from the same tier and seed and reads test itself.
+    """
+    if config.split == "none":
+        return list(annotations), [], None
+
+    assignment = split_for_tier(
+        annotations, config.split, config.holdout_setup, config.val_fraction, config.seed
+    )
+    train_ids = {i for i, p in assignment.partitions.items() if p == "train"}
+    val_ids = {i for i, p in assignment.partitions.items() if p == "val"}
+    return (
+        [a for a in annotations if a.image_id in train_ids],
+        [a for a in annotations if a.image_id in val_ids],
+        assignment.digest,
+    )
 
 
 def build_dataset(config: TrainConfig, annotations: Sequence[Annotation]) -> SceneDataset:
@@ -106,8 +132,15 @@ def train(
     seed_everything(config.seed)
 
     if train_annotations is None:
-        train_annotations = list(read_jsonl(config.manifest))
-    if config.limit:
+        loaded = list(read_jsonl(config.manifest))
+        if config.limit:
+            loaded = loaded[: config.limit]
+        train_annotations, split_val, digest = apply_split(config, loaded)
+        if val_annotations is None:
+            val_annotations = split_val
+        if split_digest is None:
+            split_digest = digest
+    elif config.limit:
         train_annotations = list(train_annotations)[: config.limit]
     if not train_annotations:
         raise ValueError("no training annotations")

@@ -43,6 +43,10 @@ class TrainConfig:
     offset_weight: float = 5.0
     workers: int = 2
 
+    split: str = "none"       # none | session | cross_setup | sim_to_real
+    holdout_setup: str = ""
+    val_fraction: float = 0.15
+
     jitter: bool = True
     seed: int = 0
     device: str = "auto"
@@ -58,6 +62,12 @@ class TrainConfig:
             raise ValueError("epochs and batch_size must be positive")
         if self.learning_rate <= 0:
             raise ValueError("learning_rate must be positive")
+        if self.split not in ("none", "session", "cross_setup", "sim_to_real"):
+            raise ValueError(f"unknown split {self.split!r}")
+        if self.split == "cross_setup" and not self.holdout_setup:
+            raise ValueError("cross_setup requires holdout_setup")
+        if not 0.0 <= self.val_fraction < 1.0:
+            raise ValueError("val_fraction must be in [0, 1)")
 
     @property
     def input_size(self) -> tuple[int, int]:

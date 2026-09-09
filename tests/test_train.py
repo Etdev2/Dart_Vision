@@ -193,3 +193,65 @@ def test_cli_runs_end_to_end(corpus, tmp_path, capsys):
     out = capsys.readouterr().out
     assert '"epochs": 2' in out
     assert (tmp_path / "cli" / "run.json").exists()
+
+
+# --------------------------------------------------------------------------
+# Splits
+# --------------------------------------------------------------------------
+
+def test_no_split_trains_on_everything(corpus, tmp_path):
+    from dartvision.train.runner import apply_split
+
+    annotations, manifest, images = corpus
+    config = config_for(tmp_path, manifest, images, split="none")
+    train_set, val_set, digest = apply_split(config, annotations)
+
+    assert len(train_set) == len(annotations)
+    assert val_set == [] and digest is None
+
+
+def test_a_session_split_separates_train_from_val(corpus, tmp_path):
+    from dartvision.train.runner import apply_split
+
+    annotations, manifest, images = corpus
+    config = config_for(tmp_path, manifest, images, split="session", val_fraction=0.5)
+    train_set, val_set, digest = apply_split(config, annotations)
+
+    assert digest is not None and len(digest) == 16
+    train_sessions = {a.session_id for a in train_set}
+    val_sessions = {a.session_id for a in val_set}
+    assert not (train_sessions & val_sessions), "a session spans train and val"
+
+
+def test_apply_split_never_hands_back_the_test_partition(corpus, tmp_path):
+    """Training must not be able to see test, by construction rather than care."""
+    from dartvision.data.splits import split_for_tier
+    from dartvision.train.runner import apply_split
+
+    annotations, manifest, images = corpus
+    config = config_for(tmp_path, manifest, images, split="session", val_fraction=0.5)
+    assignment = split_for_tier(annotations, "session", val_fraction=0.5, seed=config.seed)
+    test_ids = {i for i, p in assignment.partitions.items() if p == "test"}
+
+    train_set, val_set, _ = apply_split(config, annotations)
+    returned = {a.image_id for a in train_set} | {a.image_id for a in val_set}
+    assert not (returned & test_ids)
+
+
+def test_the_split_digest_is_recorded_in_provenance(corpus, tmp_path):
+    annotations, manifest, images = corpus
+    config = config_for(
+        tmp_path, manifest, images, epochs=1, split="session", val_fraction=0.5
+    )
+    train(config)
+    payload = json.loads((tmp_path / "run" / "run.json").read_text())
+    assert payload["split_digest"] is not None
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"split": "nonsense"}, {"split": "cross_setup"}, {"val_fraction": 1.0}],
+)
+def test_invalid_split_configs_are_rejected(kwargs):
+    with pytest.raises(ValueError):
+        TrainConfig(manifest="m", image_root="i", **kwargs)

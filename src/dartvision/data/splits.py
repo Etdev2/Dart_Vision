@@ -30,6 +30,7 @@ from dartvision.data.labels import Annotation, Origin
 
 __all__ = [
     "Partition",
+    "split_for_tier",
     "SplitAssignment",
     "LeakageError",
     "build_session_split",
@@ -254,6 +255,62 @@ def validate_split(
                 f"setup(s) {sorted(overlap)} appear in both train and test; a "
                 "cross-setup split must hold out whole setups"
             )
+
+
+def split_for_tier(
+    annotations: Sequence[Annotation],
+    tier: str,
+    holdout_setup: str = "",
+    val_fraction: float = 0.15,
+    seed: int = 0,
+) -> SplitAssignment:
+    """Build the split for a named benchmark tier.
+
+    Validation sessions are chosen deterministically from a seed, so a tier plus
+    a seed reproduces the same split -- which is what makes the digest a useful
+    identity rather than a record of one lucky shuffle.
+    """
+    import random as _random
+
+    setup_of, images = _group(annotations)
+    sessions = sorted(images)
+    if not sessions:
+        raise LeakageError("no sessions to split")
+
+    def pick_validation(pool: Sequence[str]) -> list[str]:
+        if not pool or val_fraction <= 0:
+            return []
+        count = max(1, round(len(pool) * val_fraction)) if len(pool) > 1 else 0
+        return sorted(_random.Random(seed).sample(sorted(pool), count))
+
+    if tier == "cross_setup":
+        if not holdout_setup:
+            raise LeakageError("cross_setup needs a holdout_setup")
+        remaining = [s for s in sessions if setup_of[s] != holdout_setup]
+        return build_cross_setup_split(
+            annotations, holdout_setup, val_sessions=pick_validation(remaining)
+        )
+
+    if tier == "sim_to_real":
+        synthetic = [s for s in sessions if not _origin_of(annotations)[s].is_real]
+        return build_sim_to_real_split(annotations, val_sessions=pick_validation(synthetic))
+
+    if tier == "session":
+        held = pick_validation(sessions)
+        rest = [s for s in sessions if s not in set(held)]
+        test = pick_validation(rest) if len(rest) > 1 else []
+        return build_session_split(annotations, held, test, tier="session")
+
+    raise LeakageError(
+        f"unknown tier {tier!r}; expected one of: session, cross_setup, sim_to_real"
+    )
+
+
+def _origin_of(annotations: Sequence[Annotation]) -> dict[str, Origin]:
+    origins: dict[str, Origin] = {}
+    for a in annotations:
+        origins.setdefault(a.session_id, a.origin)
+    return origins
 
 
 @dataclass
