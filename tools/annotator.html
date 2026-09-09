@@ -1,0 +1,278 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Dart Vision annotator</title>
+<style>
+  :root { --bg:#f8fafc; --panel:#fff; --ink:#0f172a; --muted:#64748b;
+          --line:#e2e8f0; --accent:#2563eb; --tip:#dc2626; --ok:#059669; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f172a; --panel:#1e293b; --ink:#e2e8f0; --muted:#94a3b8;
+            --line:#334155; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 ui-sans-serif,system-ui,sans-serif;
+         background:var(--bg); color:var(--ink); }
+  header { padding:10px 16px; border-bottom:1px solid var(--line);
+           background:var(--panel); display:flex; gap:12px; align-items:center;
+           flex-wrap:wrap; position:sticky; top:0; z-index:5; }
+  h1 { font-size:15px; margin:0 12px 0 0; font-weight:650; }
+  input[type=text] { background:var(--bg); color:var(--ink);
+                     border:1px solid var(--line); border-radius:6px;
+                     padding:5px 8px; font:inherit; width:190px; }
+  button { background:var(--panel); color:var(--ink); border:1px solid var(--line);
+           border-radius:6px; padding:6px 11px; font:inherit; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  main { display:grid; grid-template-columns:210px 1fr 260px; gap:12px; padding:12px;
+         align-items:start; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px;
+           padding:12px; }
+  #files { max-height:74vh; overflow:auto; }
+  .file { padding:5px 7px; border-radius:5px; cursor:pointer; font-size:12.5px;
+          display:flex; justify-content:space-between; gap:6px; }
+  .file:hover { background:var(--bg); }
+  .file.sel { background:var(--accent); color:#fff; }
+  .badge { font-size:11px; color:var(--ok); font-weight:600; }
+  .file.sel .badge { color:#fff; }
+  #stage { position:relative; }
+  canvas { max-width:100%; border:1px solid var(--line); border-radius:8px;
+           cursor:crosshair; display:block; background:var(--panel); }
+  #loupe { position:absolute; right:8px; top:8px; width:150px; height:150px;
+           border:2px solid var(--accent); border-radius:8px; display:none;
+           pointer-events:none; background:var(--panel); }
+  .row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  ol { margin:6px 0; padding-left:20px; font-size:12.5px; }
+  .hint { color:var(--muted); font-size:12px; }
+  .warn { color:var(--tip); font-size:12px; font-weight:600; }
+  hr { border:0; border-top:1px solid var(--line); margin:12px 0; }
+</style>
+
+<header>
+  <h1>Dart Vision annotator</h1>
+  <label>setup <input type="text" id="setup" value="garage" spellcheck="false"></label>
+  <label>session <input type="text" id="session" value="garage/2026-01-01-a" spellcheck="false"></label>
+  <input type="file" id="load" accept="image/*" multiple>
+  <span class="hint" id="status">no images loaded</span>
+</header>
+
+<main>
+  <div class="panel" id="files"><div class="hint">Load images. Sorted by filename, which should be capture order.</div></div>
+
+  <div class="panel" id="stage">
+    <canvas id="canvas" width="900" height="640"></canvas>
+    <canvas id="loupe" width="150" height="150"></canvas>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <button id="modeLandmarks" class="primary">Landmarks</button>
+      <button id="modeTips">Tips</button>
+    </div>
+    <div class="hint" id="modeHelp"></div>
+    <hr>
+    <div class="row">
+      <button id="undo">Undo point</button>
+      <button id="clear">Clear</button>
+    </div>
+    <ol id="points"></ol>
+    <hr>
+    <div class="hint">Burst expansion</div>
+    <div class="row">
+      <label class="hint">preceding frames <input type="text" id="burstBack" value="3" style="width:44px"></label>
+      <button id="expand">Expand burst</button>
+    </div>
+    <div class="hint">Click the tips on the <em>last</em> frame of a visit in throw order, then expand backwards over the frames that preceded it.</div>
+    <hr>
+    <button id="export" class="primary">Export JSONL</button>
+    <div class="hint" id="exportHint"></div>
+  </div>
+</main>
+
+<script>
+const LANDMARK_NAMES = ["cal_1 (9 deg, 13|6 wire)","cal_2 (99 deg, 20|5)","cal_3 (189 deg, 8|11)",
+  "cal_4 (279 deg, 17|3)","cal_5 treble (9 deg)","cal_6 treble (99 deg)",
+  "cal_7 treble (189 deg)","cal_8 treble (279 deg)"];
+
+const state = { images: [], index: -1, mode: "landmarks", landmarks: [], tips: {}, bursts: {} };
+const $ = id => document.getElementById(id);
+const canvas = $("canvas"), ctx = canvas.getContext("2d");
+const loupe = $("loupe"), lctx = loupe.getContext("2d");
+
+$("load").addEventListener("change", async e => {
+  const files = [...e.target.files].sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+  state.images = [];
+  for (const file of files) {
+    const bitmap = await createImageBitmap(file);
+    state.images.push({ name: file.name, bitmap, w: bitmap.width, h: bitmap.height });
+  }
+  state.index = state.images.length ? 0 : -1;
+  renderFiles(); draw(); updateStatus();
+});
+
+function renderFiles() {
+  const box = $("files");
+  box.innerHTML = "";
+  state.images.forEach((img, i) => {
+    const row = document.createElement("div");
+    row.className = "file" + (i === state.index ? " sel" : "");
+    const tips = state.tips[img.name];
+    row.innerHTML = `<span>${img.name}</span><span class="badge">${tips ? tips.length + "d" : ""}</span>`;
+    row.onclick = () => { state.index = i; renderFiles(); draw(); };
+    box.appendChild(row);
+  });
+}
+
+function current() { return state.index >= 0 ? state.images[state.index] : null; }
+
+function draw() {
+  const img = current();
+  if (!img) { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
+  const scale = Math.min(canvas.width / img.w, canvas.height / img.h);
+  const dw = img.w * scale, dh = img.h * scale;
+  const ox = (canvas.width - dw) / 2, oy = (canvas.height - dh) / 2;
+  state.view = { scale, ox, oy };
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img.bitmap, ox, oy, dw, dh);
+
+  state.landmarks.forEach((p, i) => mark(p, "#2563eb", String(i + 1), ox, oy, dw, dh));
+  (state.tips[img.name] || []).forEach((p, i) => mark(p, "#dc2626", "T" + (i + 1), ox, oy, dw, dh));
+  renderPoints();
+}
+
+function mark(p, colour, label, ox, oy, dw, dh) {
+  const x = ox + p[0] * dw, y = oy + p[1] * dh;
+  ctx.strokeStyle = colour; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 11, y); ctx.lineTo(x + 11, y);
+  ctx.moveTo(x, y - 11); ctx.lineTo(x, y + 11); ctx.stroke();
+  ctx.fillStyle = colour; ctx.font = "bold 12px ui-monospace,monospace";
+  ctx.fillText(label, x + 11, y - 8);
+}
+
+canvas.addEventListener("mousemove", e => {
+  const img = current(); if (!img) return;
+  const r = canvas.getBoundingClientRect();
+  const cx = (e.clientX - r.left) * canvas.width / r.width;
+  const cy = (e.clientY - r.top) * canvas.height / r.height;
+  const { scale, ox, oy } = state.view;
+  const ix = (cx - ox) / scale, iy = (cy - oy) / scale;
+  const zoom = 6, half = 150 / (2 * zoom);
+  loupe.style.display = "block";
+  lctx.imageSmoothingEnabled = false;
+  lctx.clearRect(0, 0, 150, 150);
+  lctx.drawImage(img.bitmap, ix - half, iy - half, half * 2, half * 2, 0, 0, 150, 150);
+  lctx.strokeStyle = "#2563eb"; lctx.lineWidth = 1;
+  lctx.beginPath(); lctx.moveTo(75, 60); lctx.lineTo(75, 90);
+  lctx.moveTo(60, 75); lctx.lineTo(90, 75); lctx.stroke();
+});
+canvas.addEventListener("mouseleave", () => { loupe.style.display = "none"; });
+
+canvas.addEventListener("click", e => {
+  const img = current(); if (!img) return;
+  const r = canvas.getBoundingClientRect();
+  const cx = (e.clientX - r.left) * canvas.width / r.width;
+  const cy = (e.clientY - r.top) * canvas.height / r.height;
+  const { scale, ox, oy } = state.view;
+  const nx = (cx - ox) / (img.w * scale), ny = (cy - oy) / (img.h * scale);
+  if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return;
+
+  if (state.mode === "landmarks") {
+    if (state.landmarks.length >= 8) return;
+    state.landmarks.push([nx, ny]);
+  } else {
+    const tips = state.tips[img.name] || [];
+    if (tips.length >= 3) return;
+    tips.push([nx, ny]);
+    state.tips[img.name] = tips;
+  }
+  draw(); renderFiles(); updateStatus();
+});
+
+function renderPoints() {
+  const img = current();
+  const list = state.mode === "landmarks" ? state.landmarks : (img ? state.tips[img.name] || [] : []);
+  $("points").innerHTML = list.map((p, i) => {
+    const name = state.mode === "landmarks" ? (LANDMARK_NAMES[i] || "extra") : "tip " + (i + 1);
+    return `<li>${name} &mdash; ${p[0].toFixed(4)}, ${p[1].toFixed(4)}</li>`;
+  }).join("");
+  $("modeHelp").textContent = state.mode === "landmarks"
+    ? `Click the 8 wire intersections in order. Annotated once; applies to every frame in this session. Next: ${LANDMARK_NAMES[state.landmarks.length] || "done"}`
+    : "Click up to 3 tips in throw order on the final frame of a visit.";
+}
+
+for (const [id, mode] of [["modeLandmarks", "landmarks"], ["modeTips", "tips"]]) {
+  $(id).onclick = () => {
+    state.mode = mode;
+    $("modeLandmarks").className = mode === "landmarks" ? "primary" : "";
+    $("modeTips").className = mode === "tips" ? "primary" : "";
+    draw();
+  };
+}
+
+$("undo").onclick = () => {
+  const img = current();
+  if (state.mode === "landmarks") state.landmarks.pop();
+  else if (img && state.tips[img.name]) state.tips[img.name].pop();
+  draw(); renderFiles(); updateStatus();
+};
+$("clear").onclick = () => {
+  const img = current();
+  if (state.mode === "landmarks") state.landmarks = [];
+  else if (img) delete state.tips[img.name];
+  draw(); renderFiles(); updateStatus();
+};
+
+$("expand").onclick = () => {
+  const img = current(); if (!img) return;
+  const tips = state.tips[img.name] || [];
+  const back = parseInt($("burstBack").value, 10);
+  if (!tips.length || !Number.isFinite(back) || back < 1) return;
+  for (let k = 1; k <= back; k++) {
+    const prev = state.images[state.index - k];
+    if (!prev) break;
+    state.tips[prev.name] = tips.slice(0, Math.max(0, tips.length - k));
+  }
+  renderFiles(); updateStatus();
+};
+
+function updateStatus() {
+  const labelled = Object.keys(state.tips).length;
+  const naive = state.images.length * 8 + Object.values(state.tips).reduce((a, t) => a + t.length, 0);
+  const spent = state.landmarks.length + Object.values(state.tips).reduce((a, t) => a + t.length, 0);
+  $("status").textContent = state.images.length
+    ? `${state.images.length} images | ${state.landmarks.length}/8 landmarks | ${labelled} frames with tips`
+    : "no images loaded";
+  $("exportHint").textContent = state.images.length
+    ? `${spent} clicks spent vs ${naive} labelling every frame independently`
+    : "";
+  $("status").className = state.landmarks.length < 4 && state.images.length ? "warn" : "hint";
+}
+
+$("export").onclick = () => {
+  if (state.landmarks.length < 4) { alert("At least 4 landmarks are needed, or no frame can be scored."); return; }
+  const setup = $("setup").value.trim(), session = $("session").value.trim();
+  if (!setup || !session) { alert("setup and session are required"); return; }
+
+  const landmarks = state.landmarks.length === 8 ? state.landmarks
+    : state.landmarks.slice(0, 4).concat(Array(Math.max(0, 4 - state.landmarks.length)).fill(null));
+
+  const lines = state.images.map(img => JSON.stringify({
+    image_id: `${session}/${img.name}`,
+    setup_id: setup,
+    session_id: session,
+    origin: "real-thrown",
+    landmarks,
+    tips: state.tips[img.name] || [],
+    image_size: [img.w, img.h],
+    meta: { source_file: img.name },
+  }, Object.keys({image_id:0,image_size:0,landmarks:0,meta:0,origin:0,session_id:0,setup_id:0,tips:0}).sort()));
+
+  const blob = new Blob([lines.join("\n") + "\n"], { type: "application/x-ndjson" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "manifest.jsonl";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+</script>

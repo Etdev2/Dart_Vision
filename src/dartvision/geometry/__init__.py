@@ -2,10 +2,12 @@
 
 from dartvision.geometry.board import (
     BDO_BOARD,
+    Boundary,
     SECTORS_CLOCKWISE_FROM_20,
     BoardSpec,
     Hit,
     margin_to_nearest_boundary,
+    nearest_boundary,
     score_at,
 )
 from dartvision.geometry.camera import CameraPose, board_to_image_matrix, project
@@ -24,6 +26,7 @@ __all__ = [
     "CALIBRATION_ANGLES_DEG",
     "SECTORS_CLOCKWISE_FROM_20",
     "BoardSpec",
+    "Boundary",
     "CameraPose",
     "Hit",
     "Homography",
@@ -34,6 +37,7 @@ __all__ = [
     "calibration_points_8",
     "estimate_homography",
     "margin_to_nearest_boundary",
+    "nearest_boundary",
     "project",
     "score_at",
 ]

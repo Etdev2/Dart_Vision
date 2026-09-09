@@ -28,8 +28,10 @@ __all__ = [
     "BoardSpec",
     "BDO_BOARD",
     "SECTORS_CLOCKWISE_FROM_20",
+    "Boundary",
     "Hit",
     "score_at",
+    "nearest_boundary",
     "margin_to_nearest_boundary",
 ]
 
@@ -147,6 +149,63 @@ def score_at(x: float, y: float, board: BoardSpec = BDO_BOARD) -> Hit:
     )
 
 
+@dataclass(frozen=True)
+class Boundary:
+    """The nearest place where the score changes, and how far away it is."""
+
+    kind: str          # "radial" or "sector"
+    name: str          # human-readable, e.g. "outer treble wire" or "20|5 wire"
+    distance_mm: float
+    inside: bool       # for a radial boundary, whether the point sits inside it
+
+
+def _radial_boundary_names(board: BoardSpec) -> tuple[tuple[float, str], ...]:
+    return (
+        (board.r_inner_bull, "bullseye ring"),
+        (board.r_outer_bull, "outer bull ring"),
+        (board.r_treble_inner, "inner treble wire"),
+        (board.r_treble, "outer treble wire"),
+        (board.r_double_inner, "inner double wire"),
+        (board.r_double, "outer double wire"),
+    )
+
+
+def nearest_boundary(
+    x: float, y: float, board: BoardSpec = BDO_BOARD
+) -> Boundary:
+    """The nearest score-changing boundary to ``(x, y)``, named.
+
+    Sector wires are ignored inside the outer bull, where the bed number does
+    not affect the score.
+    """
+    r = math.hypot(x, y)
+    radius, label = min(
+        _radial_boundary_names(board), key=lambda item: abs(r - item[0])
+    )
+    best = Boundary(kind="radial", name=label, distance_mm=abs(r - radius), inside=r < radius)
+
+    if r <= board.r_outer_bull:
+        return best
+
+    angle = math.degrees(math.atan2(y, x))
+    offset = (_FIRST_BOUNDARY_DEG - angle) % _SECTOR_ARC_DEG
+    angular_deg = min(offset, _SECTOR_ARC_DEG - offset)
+    angular_mm = r * math.radians(angular_deg)
+    if angular_mm >= best.distance_mm:
+        return best
+
+    index = int(math.floor((_FIRST_BOUNDARY_DEG - angle) / _SECTOR_ARC_DEG))
+    wire_index = index if offset <= _SECTOR_ARC_DEG / 2 else index + 1
+    counter_clockwise = SECTORS_CLOCKWISE_FROM_20[(wire_index - 1) % 20]
+    clockwise = SECTORS_CLOCKWISE_FROM_20[wire_index % 20]
+    return Boundary(
+        kind="sector",
+        name=f"{counter_clockwise}|{clockwise} wire",
+        distance_mm=angular_mm,
+        inside=False,
+    )
+
+
 def margin_to_nearest_boundary(
     x: float, y: float, board: BoardSpec = BDO_BOARD
 ) -> float:
@@ -157,19 +216,5 @@ def margin_to_nearest_boundary(
     error larger than it may. Reported alongside localization error, it
     separates "the model is imprecise" from "this dart was unscoreable at any
     achievable precision".
-
-    Sector wires are ignored inside the outer bull, where the bed number does
-    not affect the score.
     """
-    r = math.hypot(x, y)
-    radial = min(abs(r - b) for b in board.radial_boundaries)
-
-    if r <= board.r_outer_bull:
-        return radial
-
-    # Angular distance to the nearer of the two wires bounding this bed, as an
-    # arc length at this radius.
-    angle = math.degrees(math.atan2(y, x))
-    offset = (_FIRST_BOUNDARY_DEG - angle) % _SECTOR_ARC_DEG
-    angular_deg = min(offset, _SECTOR_ARC_DEG - offset)
-    return min(radial, r * math.radians(angular_deg))
+    return nearest_boundary(x, y, board).distance_mm

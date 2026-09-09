@@ -42,6 +42,9 @@ First implementation, on the `prototype/` track for #17:
 - `src/dartvision/data/labels.py` — the annotation contract, shared by synthetic (#25) and captured (#26) data.
 - `src/dartvision/metrics/scoring.py` — [#14](https://github.com/Etdev2/Dart_Vision/issues/14)'s metrics and [#21](https://github.com/Etdev2/Dart_Vision/issues/21)'s gates, including the risk–coverage curve and error concentration.
 - `src/dartvision/geometry/camera.py` — pinhole camera over the board plane.
+- `src/dartvision/annotate/` — [#26](https://github.com/Etdev2/Dart_Vision/issues/26) capture tooling: session landmark propagation, burst expansion, and placed-dart capture plans.
+- `tools/annotator.html` — browser annotator, no install.
+- `src/dartvision/doctor.py` — reports what this machine can run.
 - `src/dartvision/synthetic/` — [#25](https://github.com/Etdev2/Dart_Vision/issues/25) scene sampling: camera poses, dart placement at controlled distances from scoring boundaries, exact labels, structured dataset generation, and a wireframe SVG preview.
 
 Generate a scene manifest for a renderer to consume:

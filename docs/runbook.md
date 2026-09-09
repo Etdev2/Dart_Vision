@@ -92,6 +92,34 @@ wire a dart tip sits, and that is exactly where the two renderers differ most.
 
 Once a batch looks right, drop `--limit` and render the lot.
 
+## 4b. Capturing your own data (#26)
+
+Two tools, both usable the moment you have a board and a phone.
+
+**A capture plan for hand-placed darts** — thrown darts land near a wire only
+by luck, and #14 needs them deliberately:
+
+```bash
+python -m dartvision.annotate --margins 0.25,0.5,1,2 --per-margin 5 --out plan.txt
+```
+
+Prints rows like `T8 | 0.25 mm inside the outer treble wire, about 107 mm out
+from the bull`. Place, photograph, move on.
+
+**A browser annotator** — open `tools/annotator.html` in any browser, no install:
+
+1. Enter setup and session ids, load a session's images (sorted by filename).
+2. Click the 8 landmarks **once**. They apply to every frame in the session.
+3. Switch to Tips, click up to 3 tips in throw order on the **last** frame of a
+   visit, then "Expand burst" backwards over the preceding frames.
+4. Export JSONL, which matches the same contract the synthetic generator emits.
+
+A magnifier follows the cursor, because the precision that matters here is
+sub-millimetre on the board (#15).
+
+The header shows clicks spent against clicks if every frame were labelled
+independently. That ratio is the reason this is a weekend rather than a month.
+
 ## 5. Rent a GPU for training
 
 Only training needs rented hardware. RTX 4090 on RunPod Community is about
