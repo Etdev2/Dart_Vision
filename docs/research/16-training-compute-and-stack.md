@@ -134,15 +134,77 @@ Any run that informs a #20 or #21 decision must record, automatically:
 
 ## 7. Cost envelope
 
-| Phase | Estimate |
-| --- | --- |
-| #17 small-sample harness | < $10 — short runs, mostly debugging |
-| #18 augmentation sweep (~10–20 short runs) | $30–80 |
-| #20 full campaign (~10–20 full runs) | $50–150 |
-| Storage + tracking | ~$5/month |
-| **v0.1 total** | **~$150–300** |
+### 7.1 Derived from the actual workload
 
-For context, a single Ultralytics Enterprise Licence would very likely exceed this entire budget — which is another reason the permissive path in §4 is the right default, not merely the safe one.
+Throughput scales roughly with pixel count for a small convolutional backbone.
+Anchoring on a ResNet-18-class model training at ~2,500 img/s at 224 px on a
+4090 with mixed precision, derated 25% for data loading and the second head:
+
+| Input | img/s | One 100-epoch run, 30k images | Cost at $0.34/hr |
+| --- | --- | --- | --- |
+| 512 px | ~360 | **2.3 h** | ~$0.80 |
+| 640 px | ~230 | **3.6 h** | ~$1.23 |
+| 800 px | ~147 | **5.7 h** | ~$1.93 |
+
+A full campaign — arms A–D from #25, across two architectures, with seeds, so
+roughly **16 full runs**:
+
+| Input | GPU-hours | at $0.34/hr | at $0.69/hr |
+| --- | --- | --- | --- |
+| 512 px | **37 h** | $13 | $26 |
+| 800 px | **91 h** | $31 | $63 |
+
+| Phase | GPU-hours | Cost |
+| --- | --- | --- |
+| #17 harness bring-up (short runs, much idle) | 5–10 | $2–7 |
+| #18 augmentation sweep | 8–15 | $3–10 |
+| #20 full campaign | 37–91 | $13–63 |
+| Storage + tracking | — | ~$5/month |
+| **v0.1 total** | **50–115** | **~$20–80** |
+
+This supersedes an earlier, more conservative $150–300 estimate in this
+document. Both are estimates; **#17 owes back real seconds-per-epoch** and
+should correct these.
+
+### 7.2 Resolution is the dominant lever — and it has a floor
+
+Input resolution drives cost more than anything else: 800 px costs ~2.5× what
+512 px does, in both training *and* rendering. But it cannot be chosen on cost
+alone. #15's precision budget puts the 10 mm double/treble ring at **10–20 px at
+800 px input**; at 512 px that falls to roughly 6–13 px, which crowds the
+precision needed to resolve a multiplier at all.
+
+So resolution is bounded below by the physics of the scoring task, not by
+budget. Treat it as an experiment for #17/#18 to settle — measure the accuracy
+cost of dropping resolution before banking the saving.
+
+### 7.3 Rendering, not training, is likely the bottleneck
+
+Rendering on the Mac is free but not fast. Estimated wall-clock with EEVEE:
+
+| Seconds/frame | 20k images | 50k images |
+| --- | --- | --- |
+| 0.5 | 2.8 h | 6.9 h |
+| 1.0 | 5.6 h | 13.9 h |
+| 2.0 | **11.1 h** | **27.8 h** |
+| 4.0 | 22.2 h | 55.6 h |
+
+At a plausible 1–2 s/frame, generating a 50k-image corpus is **more wall-clock
+than the entire training campaign**, and it occupies the owner's only machine
+while it runs.
+
+That inverts the usual advice: **renting a GPU for rendering may beat free
+laptop time.** Blender on a rented 4090 would cut a 28-hour render to a few
+hours for a couple of dollars. Free is not free when it costs a day of the
+machine you also need to work on.
+
+Levers, in order of preference: prefer EEVEE over Cycles; let #25's Arm D curve
+say how many images are actually needed before rendering tens of thousands;
+then consider renting for the render.
+
+For context, a single Ultralytics Enterprise Licence would very likely exceed
+this entire budget — which is another reason the permissive path in §4 is the
+right default, not merely the safe one.
 
 ## 8. Recommendation
 
