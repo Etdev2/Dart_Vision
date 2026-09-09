@@ -90,6 +90,23 @@ def annular_sector(r_inner_m, r_outer_m, angle_from, angle_to, z, steps=8):
     return verts, faces
 
 
+def disc(radius_m: float, z: float, steps: int = 192):
+    """A filled circle as a triangle fan.
+
+    Needed because an annulus with zero inner radius collapses its inner ring
+    of vertices onto the origin, producing degenerate faces -- which is what
+    made the bullseye render as a dark artefact instead of red. The bull is a
+    50-point scoring region, so a model trained on that would learn the wrong
+    appearance for the highest-value target on the board.
+    """
+    verts = [(0.0, 0.0, z)]
+    for i in range(steps):
+        angle = 2.0 * math.pi * i / steps
+        verts.append((radius_m * math.cos(angle), radius_m * math.sin(angle), z))
+    faces = [(0, i + 1, (i + 1) % steps + 1) for i in range(steps)]
+    return verts, faces
+
+
 def add_mesh(name: str, verts, faces, material):
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(verts, [], faces)
@@ -130,13 +147,13 @@ def build_board(board: BoardSpec, style: str) -> None:
             verts, faces = annular_sector(r0, r1, angle_from, angle_to, 0.0)
             add_mesh(f"bed-{i}-{band_index}", verts, faces, material)
 
-    # Bull rings and the surround, each a full annulus.
+    # The bullseye is a disc; the 25 ring and the surround are annuli.
+    add_mesh("inner-bull", *disc(board.r_inner_bull / m, 0.0), red)
     for r0, r1, material, name in (
-        (0.0, board.r_inner_bull / m, red, "inner-bull"),
         (board.r_inner_bull / m, board.r_outer_bull / m, green, "outer-bull"),
         (board.r_double / m, board.r_board / m, surround, "surround"),
     ):
-        verts, faces = annular_sector(r0, r1, 0.0, 360.0, 0.0, steps=160)
+        verts, faces = annular_sector(r0, r1, 0.0, 360.0, 0.0, steps=192)
         add_mesh(name, verts, faces, material)
 
     # Wires sit fractionally proud of the surface, as real ones do.
@@ -214,6 +231,25 @@ def remove_objects(objects) -> None:
             bpy.data.objects.remove(obj, do_unlink=True)
         except (ReferenceError, RuntimeError):
             pass
+
+
+def set_world(brightness: float = 0.05) -> None:
+    """Keep ambient low so the black beds read black.
+
+    The default world lifted the near-black beds (base colour ~0.045) to a mid
+    grey, flattening the black/cream contrast that defines a dartboard. Some
+    ambient is realistic; this much is not.
+    """
+    world = bpy.context.scene.world
+    if world is None:
+        world = bpy.data.worlds.new("World")
+        bpy.context.scene.world = world
+    if getattr(world, "node_tree", None) is None:
+        world.use_nodes = True
+    background = world.node_tree.nodes.get("Background")
+    if background is not None:
+        background.inputs[0].default_value = (0.02, 0.02, 0.025, 1.0)
+        background.inputs[1].default_value = brightness
 
 
 def add_lighting(style: str, rng) -> None:
@@ -433,6 +469,7 @@ def main() -> int:
         if session_key != current_session:
             clear_scene()
             build_board(BDO_BOARD, str(meta.get("board_style", "classic-black")))
+            set_world()
             add_lighting(str(meta.get("lighting", "daylight-soft")), rng)
             camera = setup_camera(pose)
             resolved_engine = configure_render(args.engine, args.samples, annotation.image_size)
