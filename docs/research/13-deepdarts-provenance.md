@@ -13,6 +13,14 @@
 | Preprint | `arXiv:2105.09880` | Verified |
 | Code | `https://github.com/wmcnally/deep-darts` | Verified |
 | Data + weights | IEEE DataPort, `deepdarts-dataset` | Verified (from repo README) |
+| **Dataset DOI** | **`10.21227/05e7-xs69`** | **Verified** (DataPort record) |
+| Citation author | William McNally, University of Waterloo | Verified |
+| Record created / last updated | 2021-06-12 / **2026-06-18** | Verified |
+| Data format | `*.jpg` | Verified |
+
+The DOI is the citable identifier and will be required for attribution under any licence outcome — record it in the model card for #22.
+
+> The DataPort record was **last updated 2026-06-18**, only months ago. Whatever licence or terms are read from the page should be captured with that date noted, since the record is not static.
 
 ## 2. Rights matrix
 
