@@ -10,10 +10,11 @@ We are intentionally resolving the major product and architecture decisions befo
 - **Expert team and routing:** [`AGENTS.md`](./AGENTS.md)
 - **Issue tracker / Wayfinder conventions:** [`docs/agents/issue-tracker.md`](./docs/agents/issue-tracker.md)
 - **Initial system hypothesis:** [`docs/architecture/initial-system-hypothesis.md`](./docs/architecture/initial-system-hypothesis.md)
+- **Data strategy decision:** [`docs/architecture/data-strategy-decision.md`](./docs/architecture/data-strategy-decision.md)
 
 ## Dart Vision Brain (AI engine)
 
-The vision model is planned as a standalone, versioned AI engine rather than training logic buried in the app.
+The vision model is planned as a standalone, versioned AI engine rather than training logic buried in the app. It is trained on **synthetic imagery plus data Dart Vision captures itself** - no third-party datasets ([decision](./docs/architecture/data-strategy-decision.md)).
 
 - **Brain Wayfinder map:** https://github.com/Etdev2/Dart_Vision/issues/12
 - **DeepDarts provenance & rights (#13):** [`docs/research/13-deepdarts-provenance.md`](./docs/research/13-deepdarts-provenance.md)
