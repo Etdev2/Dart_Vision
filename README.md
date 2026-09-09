@@ -44,6 +44,7 @@ First implementation, on the `prototype/` track for #17:
 - `src/dartvision/events.py` — the canonical `ThrowEvent`, calibration status, and the confirmation policy.
 - `src/dartvision/data/splits.py` — leakage-safe splits for [#14](https://github.com/Etdev2/Dart_Vision/issues/14)'s tiers, plus a ledger enforcing holdout discipline.
 - `src/dartvision/data/torch_dataset.py` — training dataset over a scene manifest, with label-safe photometric jitter.
+- `src/dartvision/eval/` — tip matching and the [#21](https://github.com/Etdev2/Dart_Vision/issues/21) gate report from a checkpoint.
 - `src/dartvision/train/` — the training loop, run configuration, and the provenance every run records ([#16](https://github.com/Etdev2/Dart_Vision/issues/16)'s reproducibility contract).
 - `src/dartvision/model/net.py` — the two-head Brain from [#15](https://github.com/Etdev2/Dart_Vision/issues/15): heatmap landmarks + point-detection tips on a shared `timm` backbone. Needs `pip install -e '.[train]'`.
 - `src/dartvision/model/targets.py` — target encoding and decoding (heatmaps, soft-argmax, sub-cell offsets). No training framework required.
@@ -60,7 +61,7 @@ Generate a scene manifest for a renderer to consume:
 python -m dartvision.synthetic.generate --out data/synthetic --setups 3 --sessions 4 --images 40
 ```
 
-355 tests.
+376 tests.
 
 Train a smoke run once a manifest is rendered:
 
