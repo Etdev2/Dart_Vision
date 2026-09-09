@@ -1,4 +1,9 @@
-"""Model-facing encoding and decoding. No training framework required."""
+"""Model-facing encoding, decoding, and the network itself.
+
+``targets`` is pure NumPy and importable without a training framework; the
+network, heads and losses need PyTorch and are imported lazily so the rest of
+the package stays usable without it.
+"""
 
 from dartvision.model.targets import (
     TipTargets,
