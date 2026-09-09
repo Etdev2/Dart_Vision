@@ -11,6 +11,13 @@ We are intentionally resolving the major product and architecture decisions befo
 - **Issue tracker / Wayfinder conventions:** [`docs/agents/issue-tracker.md`](./docs/agents/issue-tracker.md)
 - **Initial system hypothesis:** [`docs/architecture/initial-system-hypothesis.md`](./docs/architecture/initial-system-hypothesis.md)
 
+## Dart Vision Brain (AI engine)
+
+The vision model is planned as a standalone, versioned AI engine rather than training logic buried in the app.
+
+- **Brain Wayfinder map:** https://github.com/Etdev2/Dart_Vision/issues/12
+- **DeepDarts provenance & rights (#13):** [`docs/research/13-deepdarts-provenance.md`](./docs/research/13-deepdarts-provenance.md)
+
 ## Core idea
 
 ```text
