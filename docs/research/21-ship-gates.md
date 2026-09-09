@@ -71,7 +71,7 @@ Gate R says the representation and pipeline work. It does not say the thing is s
 
 | Metric | Gate P | Rationale |
 | --- | --- | --- |
-| **Legs error-free** (confirmations counted as correct) | **≥ 90%** | Provisional pending #5 — the headline number |
+| **Legs error-free** (confirmations counted as correct) | **≥ 90%** | **Decided in #5** — the headline number |
 | Auto-scored per-dart error | ≤ 0.30% | Derived from the row above (§2) |
 | Auto-score coverage | ≥ 85% | ~2 confirmation taps per leg |
 | **Error concentration** — share of all errors inside the flagged set | **≥ 75%** | Makes the coverage trade actually work (§3) |
@@ -83,7 +83,26 @@ Gate R says the representation and pipeline work. It does not say the thing is s
 | On-device inference latency | ≤ 150 ms | Within a ~300 ms impact-to-display budget (#4, #5) |
 | Model size | ≤ 25 MB exported | Mobile deployment (#4, #22) |
 
-**Every threshold in §4 and §5 is provisional.** They are calibrated against derived geometry (#15), published prior art (#13, #24) and the arithmetic above — not against measurements we have taken. Two things must revise them: **#5's product decision** (which sets the headline per-leg target and therefore everything derived from it) and **#17's measurements** (real pixels-per-millimetre, real per-epoch cost, real error correlation).
+### 5.1 The product contract is now decided (#5)
+
+Settled 2026-09-09: **≥90% of legs error-free, ~2 confirmation taps per leg (15% flagged), ~300 ms impact-to-display, and uncertain detections confirm rather than auto-score.**
+
+The gates in §5 were calibrated against exactly these assumptions, so **they are no longer provisional** — they stand as real targets.
+
+The derivation, for the record. A 501 leg is ~36 darts; flagging 15% leaves 30.6 auto-scored, so auto-scored per-dart error must be **≤ 0.344%**. Raw accuracy required then depends on error concentration:
+
+| Error concentration | Raw per-dart accuracy required |
+| --- | --- |
+| 70% | 99.03% |
+| **75%** (the gate) | **98.83%** |
+| 80% | 98.54% |
+| 90% | 97.08% |
+
+**Auto-scoring everything would demand 99.708%.** Two taps a leg drops that to 98.83% — so better-calibrated confidence buys more than better raw accuracy, which is precisely why concentration is a hard gate here.
+
+**Difficulty check:** published DeepDarts implies ~98.2% per dart *on the board it trained on*. We need ~98.8% on a board never seen. About 0.6 points beyond the state of the art, on a materially harder test — reachable, but not by accident.
+
+**Still to be revised by #17's measurements:** real pixels-per-millimetre, real per-epoch cost, and real error correlation, all of which affect §4's and §5's secondary rows even though the headline is now fixed.
 
 ## 6. "Improve the model" versus "single-camera physics is the limit"
 
