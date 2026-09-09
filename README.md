@@ -29,7 +29,10 @@ The vision model is planned as a standalone, versioned AI engine rather than tra
 
 First implementation, on the `prototype/` track for #17:
 
-- `src/dartvision/geometry/` — deterministic board geometry and scoring. Clean-room from published BDO dimensions, standard library only, 33 tests.
+- `src/dartvision/geometry/board.py` — board geometry and deterministic scoring. Clean-room from published BDO dimensions, standard library only.
+- `src/dartvision/geometry/calibration.py` — calibration landmarks and the image-to-board homography.
+
+64 tests.
 
 ```bash
 pip install -e '.[dev]' && pytest

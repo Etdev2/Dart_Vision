@@ -61,14 +61,25 @@ Detect the 4 landmarks, compute the homography, warp to a canonical face-on boar
 
 **Why it is a challenger and not the baseline:** errors compound. A poor homography corrupts the rectification and the tip stage inherits it, with no recovery path. It stands or falls on landmark reliability — which is exactly what §3 says synthetic data should be able to deliver. If #25 confirms strong synthetic landmark transfer, this becomes the favourite.
 
-### 4.2 A geometric prior the reference did not use
+### 4.2 A geometric prior — corrected, and better than first stated
 
-The four landmarks lie on a **known circle** on a rigid planar board. Any predicted set that cannot correspond to a plausible perspective projection of that circle is provably wrong. Two cheap uses:
+> **Correction.** An earlier version of this section claimed that landmark sets "inconsistent with a valid homography" are provably wrong and could be rejected on a residual. **That is false for exactly four landmarks.** Any four points in general position admit an *exact* homography onto any other four, so the residual is identically zero regardless of how wrong the predictions are. There is no such signal to extract from four points. Verified in `tests/test_calibration.py::test_four_landmarks_have_no_residual_by_construction`.
 
-- **Auxiliary loss** penalising landmark configurations inconsistent with a valid homography.
-- **Inference-time validation** — a rejection signal independent of the network's own confidence, which is a genuinely useful second opinion for the "board not calibrated" state.
+What four landmarks *can* reveal is narrower:
 
-Cheap to add, and neither DeepDarts nor `dart-sense` appears to exploit it.
+- **Crossed or non-convex ordering.** A perspective projection preserves the convex position and cyclic order of four coplanar points, so a crossed quadrilateral is genuinely impossible and rejectable.
+- **Near-degeneracy** — collinear triples, coincident points, an ill-conditioned homography.
+
+Both are implemented in `assess_landmarks`, and neither needs the network's own confidence — so they remain a useful independent second opinion for the "board not calibrated" state.
+
+**The better fix is to stop using only four landmarks.** With more than four correspondences the homography becomes over-determined, which buys two real things:
+
+1. **A genuine least-squares residual**, which *is* the self-consistency signal the original claim wanted. Measured: with 8 landmarks, 2 px of injected noise produces a residual over 1 mm, while 4 landmarks report nothing.
+2. **Noise averaging.** Measured over 200 trials at 1.5 px landmark noise, eight landmarks give lower board-coordinate error than four (`test_eight_landmarks_beat_four_under_noise`). Given §2's precision budget, that is a direct accuracy gain.
+
+DeepDarts' four-point contract was *its* choice. Since Dart Vision generates and annotates its own data (#25, #26), we are not bound by it. The implemented eight-point set adds the same four wire-intersection angles on the **outer treble wire** — identical feature type, no new annotation ambiguity, twice the constraints.
+
+**Recommendation: predict 8 landmarks, not 4.** Keep the 4-point path for compatibility with the #13 contract and for ablation.
 
 ## 5. Non-negotiables carried in
 
@@ -84,7 +95,7 @@ Cheap to add, and neither DeepDarts nor `dart-sense` appears to exploit it.
 1. **Baseline: a decomposed two-head model on a shared `timm` backbone** — 4-channel heatmap with soft-argmax for landmarks, anchor-free point detection for tips. Matches each sub-problem's structure, preserves sub-pixel landmark precision, and lets §3's data split work for us.
 2. **Challenger A: unified keypoints-as-objects (YOLOX-based).** The published approach, reimplemented clean-room. If it wins, we learn something real; if it loses, the decomposition argument is evidenced rather than asserted.
 3. **Challenger B: rectify-then-detect**, contingent on #25 showing strong synthetic landmark transfer. Highest ceiling on the oblique-angle failure mode.
-4. **Add the circle/homography consistency prior** (§4.2) as an auxiliary loss and an independent inference-time rejection signal.
+4. **Predict 8 calibration landmarks rather than 4** (§4.2), giving an over-determined homography with a real residual and measurably lower board-coordinate error. Add convexity/ordering and conditioning checks as an independent inference-time rejection signal.
 5. **Report landmarks and tips as separate metrics throughout** — #14 already requires it, and §3 makes it the diagnostic that tells us whether the data strategy is working.
 6. **Defer transformer set prediction** until #26 reports corpus size.
 
