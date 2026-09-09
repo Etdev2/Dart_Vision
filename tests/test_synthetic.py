@@ -9,6 +9,7 @@ pixels existing yet.
 
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
@@ -217,3 +218,115 @@ def test_preview_svg_is_well_formed_and_marks_everything(rng):
     assert sum(1 for p in paths if p.get("stroke") == "#dc2626") == len(tips)
     assert sum(1 for p in paths if p.get("stroke") == "#111827") == 7
     assert len(root.findall(f"{ns}line")) == 20  # sector wires
+
+
+# --------------------------------------------------------------------------
+# Structured dataset generation
+# --------------------------------------------------------------------------
+
+def test_dataset_has_the_requested_shape(rng):
+    from dartvision.synthetic.dataset import DatasetSpec, generate_dataset
+
+    spec = DatasetSpec(setups=2, sessions_per_setup=3, images_per_session=5)
+    scenes = list(generate_dataset(rng, spec))
+
+    assert len(scenes) == spec.total_images == 30
+    assert len({s.annotation.setup_id for s in scenes}) == 2
+    assert len({s.annotation.session_id for s in scenes}) == 6
+
+
+def test_camera_pose_is_fixed_within_a_session(rng):
+    """A mounted phone does not move mid-session, and #14 groups by session."""
+    from dartvision.synthetic.dataset import DatasetSpec, generate_dataset
+
+    scenes = list(generate_dataset(rng, DatasetSpec(setups=2, sessions_per_setup=2, images_per_session=6)))
+    by_session: dict[str, set] = {}
+    for scene in scenes:
+        by_session.setdefault(scene.annotation.session_id, set()).add(scene.pose)
+    assert all(len(poses) == 1 for poses in by_session.values())
+    # ...but different sessions must genuinely differ.
+    assert len({next(iter(p)) for p in by_session.values()}) == len(by_session)
+
+
+def test_landmarks_are_identical_within_a_session(rng):
+    """Which is exactly why #26 can annotate them once per session."""
+    from dartvision.synthetic.dataset import DatasetSpec, generate_dataset
+
+    scenes = list(generate_dataset(rng, DatasetSpec(setups=1, sessions_per_setup=1, images_per_session=8)))
+    assert len({s.annotation.landmarks for s in scenes}) == 1
+
+
+def test_every_scene_meets_the_coverage_floor(rng):
+    from dartvision.synthetic.dataset import DatasetSpec, generate_dataset
+
+    spec = DatasetSpec(setups=2, sessions_per_setup=2, images_per_session=4, min_board_coverage=0.15)
+    for scene in generate_dataset(rng, spec):
+        assert scene.landmarks_visible
+        assert scene.board_coverage >= 0.15
+
+
+def test_placement_mix_over_represents_near_boundary_darts(rng):
+    """Deliberately unlike a real throw distribution -- see #14."""
+    from dartvision.synthetic.dataset import DatasetSpec, generate_dataset, summarize
+
+    spec = DatasetSpec(setups=1, sessions_per_setup=2, images_per_session=250)
+    scenes = list(generate_dataset(rng, spec))
+    placements = summarize(scenes)["placements"]
+
+    near = sum(v for k, v in placements.items() if k.startswith("near-boundary"))
+    assert 0.28 < near / len(scenes) < 0.42          # requested 0.35
+    assert placements.get("cluster", 0) / len(scenes) > 0.13
+    assert any(len(s.annotation.tips) == 0 for s in scenes)
+
+
+def test_generated_dataset_scores_back_correctly(rng):
+    """The round trip again, now over the structured generator."""
+    from dartvision.synthetic.dataset import DatasetSpec, generate_dataset
+
+    spec = DatasetSpec(setups=2, sessions_per_setup=2, images_per_session=25)
+    for scene in generate_dataset(rng, spec):
+        if not scene.annotation.tips:
+            continue
+        recovered = estimate_homography(scene.annotation.landmarks).to_board(
+            scene.annotation.tips
+        )
+        for placed, (x, y) in zip(scene.tips_mm, recovered):
+            assert score_at(x, y) == score_at(*placed)
+
+
+def test_impossible_coverage_demand_fails_loudly(rng):
+    from dartvision.synthetic.dataset import DatasetSpec, generate_dataset
+
+    spec = DatasetSpec(setups=1, sessions_per_setup=1, images_per_session=1, min_board_coverage=0.99)
+    with pytest.raises(RuntimeError, match="coverage"):
+        list(generate_dataset(rng, spec))
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"setups": 0},
+        {"near_boundary_fraction": 0.9, "cluster_fraction": 0.9},
+        {"landmark_count": 6},
+        {"min_board_coverage": 1.0},
+    ],
+)
+def test_invalid_specs_are_rejected(kwargs):
+    from dartvision.synthetic.dataset import DatasetSpec
+
+    with pytest.raises(ValueError):
+        DatasetSpec(**kwargs)
+
+
+def test_cli_writes_a_manifest_previews_and_a_summary(tmp_path):
+    from dartvision.data.labels import read_jsonl
+    from dartvision.synthetic.generate import main
+
+    assert main(["--out", str(tmp_path), "--setups", "1", "--sessions", "2",
+                 "--images", "5", "--previews", "3", "--seed", "3"]) == 0
+
+    annotations = list(read_jsonl(tmp_path / "manifest.jsonl"))
+    assert len(annotations) == 10
+    assert len(list((tmp_path / "previews").glob("*.svg"))) == 3
+    summary = json.loads((tmp_path / "summary.json").read_text())
+    assert summary["images"] == 10 and summary["sessions"] == 2
