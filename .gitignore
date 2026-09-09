@@ -5,3 +5,9 @@ __pycache__/
 build/
 dist/
 .venv/
+
+# Local artifacts: regenerate with `python -m dartvision.synthetic.generate`
+# and the Blender render, both deterministic from their seed.
+data/
+runs/
+*.log
