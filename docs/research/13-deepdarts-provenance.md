@@ -32,7 +32,7 @@ Code licence and data licence are separate questions and must stay separate.
 | **Dataset** (`images.zip`, `cropped_images.zip`) | IEEE DataPort | Unverified | Unknown | **Unverified** |
 | **Pretrained weights** (`models.zip`) | IEEE DataPort | Unverified; also a derivative of the unlicensed code | Unknown | **Unverified** |
 | **Board geometry constants** | Repo configs (BDO standard measurements) | Facts / standard, not protected expression | Yes | Verified |
-| **Third-party re-uploads** (forks, Roboflow copies) | Various | Inherit the same unresolved rights | **No** | Verified by inspection |
+| **Third-party re-uploads** (forks, Roboflow copies) | Various | Uploader's assertion, **not a grant** — see §2.2b | **No** | Verified by inspection |
 
 ### 2.1 The code finding is decisive
 
@@ -49,6 +49,18 @@ Secondary sources disagree, which is itself the finding:
 - A third states the dataset "requires an IEEE DataPort Subscription", which sits awkwardly with the `open-access/` path in its own URL.
 
 None of these is authoritative. **Do not record a licence for the data until the DataPort page itself has been read.** A CC BY 4.0 result would be a good outcome (commercial use permitted with attribution); anything non-commercial, or terms attached to the *download* rather than the data, would invalidate the current plan for #20 and #22.
+
+### 2.2b Third-party re-uploads confer nothing — including Roboflow Universe copies
+
+DeepDarts has been re-uploaded in several places: GitHub forks (`vrees/ghdarts`, `yfi/dart-maul`, `wayneclancy/deep-darts-pretrained`) and at least one Roboflow Universe dataset (`testing-zzmc9/deepdarts-yolov8`). Some of these display a licence field. **None of them is a source of rights.**
+
+**A re-uploader cannot grant rights they do not hold.** The licence selector on a Roboflow Universe upload, or a `LICENSE` file added to a fork, records what the *uploader* asserts — it is a claim, not a grant, unless that uploader is the copyright holder. For DeepDarts-derived images the copyright holder is McNally, not the re-uploader. An account named `testing-zzmc9` is on its face not a rights holder in this data.
+
+**Relying on a laundered copy is worse than using the original, not better.** It leaves no chain of title at all, and it damages the good-faith position that matters most if rights are ever questioned: "we read the authoritative terms and asked the author" is a defensible record; "we found a copy on a third-party site that said it was fine" is not. The estoppel clause in §2.3 applies with equal force to a mirror.
+
+One genuine exception, narrowly: if a re-uploader added **their own** images or annotations, those specific contributions are theirs to license. The DeepDarts-derived portion is not, and the two are usually inseparable in a merged dataset — so treat any mixed dataset as encumbered unless the provenance is separable and documented.
+
+**Practical note:** these copies also offer little technical value. A YOLO-format conversion is trivial to produce from `labels.pkl`, which ships in the source git repo and whose schema is fully documented in §4. There is nothing to gain and a chain-of-title problem to inherit.
 
 ### 2.3 IEEE general site terms — the fallback position, not the dataset licence
 
