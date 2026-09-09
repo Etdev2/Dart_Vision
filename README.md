@@ -31,8 +31,10 @@ First implementation, on the `prototype/` track for #17:
 
 - `src/dartvision/geometry/board.py` — board geometry and deterministic scoring. Clean-room from published BDO dimensions, standard library only.
 - `src/dartvision/geometry/calibration.py` — calibration landmarks and the image-to-board homography.
+- `src/dartvision/data/labels.py` — the annotation contract, shared by synthetic (#25) and captured (#26) data.
+- `src/dartvision/metrics/scoring.py` — [#14](https://github.com/Etdev2/Dart_Vision/issues/14)'s metrics and [#21](https://github.com/Etdev2/Dart_Vision/issues/21)'s gates, including the risk–coverage curve and error concentration.
 
-64 tests.
+113 tests.
 
 ```bash
 pip install -e '.[dev]' && pytest
