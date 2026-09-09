@@ -30,6 +30,8 @@ The vision model is planned as a standalone, versioned AI engine rather than tra
 
 **[`docs/runbook.md`](./docs/runbook.md)** — day-one sequence from clone to a rendered dataset.
 
+**[`docs/capture-protocol.md`](./docs/capture-protocol.md)** — how to photograph and annotate your own board.
+
 ```bash
 pip install -e '.[dev]' && pytest && python -m dartvision.doctor
 ```
