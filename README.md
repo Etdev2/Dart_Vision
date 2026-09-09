@@ -33,8 +33,10 @@ First implementation, on the `prototype/` track for #17:
 - `src/dartvision/geometry/calibration.py` — calibration landmarks and the image-to-board homography.
 - `src/dartvision/data/labels.py` — the annotation contract, shared by synthetic (#25) and captured (#26) data.
 - `src/dartvision/metrics/scoring.py` — [#14](https://github.com/Etdev2/Dart_Vision/issues/14)'s metrics and [#21](https://github.com/Etdev2/Dart_Vision/issues/21)'s gates, including the risk–coverage curve and error concentration.
+- `src/dartvision/geometry/camera.py` — pinhole camera over the board plane.
+- `src/dartvision/synthetic/` — [#25](https://github.com/Etdev2/Dart_Vision/issues/25) scene sampling: camera poses, dart placement at controlled distances from scoring boundaries, exact labels, and a wireframe SVG preview.
 
-113 tests.
+137 tests.
 
 ```bash
 pip install -e '.[dev]' && pytest
