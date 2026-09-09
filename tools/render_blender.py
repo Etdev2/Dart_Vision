@@ -64,7 +64,9 @@ def clear_scene() -> None:
 
 def make_material(name: str, rgba, roughness: float = 0.6, metallic: float = 0.0):
     material = bpy.data.materials.new(name)
-    material.use_nodes = True
+    # Blender 5.x materials always use nodes and deprecate the setter; 4.x needs it.
+    if getattr(material, "node_tree", None) is None:
+        material.use_nodes = True
     bsdf = material.node_tree.nodes["Principled BSDF"]
     bsdf.inputs["Base Color"].default_value = rgba
     bsdf.inputs["Roughness"].default_value = roughness
@@ -300,21 +302,73 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def configure_render(engine: str, samples: int, image_size) -> None:
+# The EEVEE identifier has changed across Blender releases -- "BLENDER_EEVEE" up
+# to 4.1, "BLENDER_EEVEE_NEXT" through the 4.2 series, and "BLENDER_EEVEE" again
+# from 5.0. Rather than track that, try the candidates and keep the one the build
+# accepts.
+EEVEE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+
+
+def select_engine(scene, engine: str) -> str:
+    if engine == "CYCLES":
+        scene.render.engine = "CYCLES"
+        return "CYCLES"
+    for name in EEVEE_CANDIDATES:
+        try:
+            scene.render.engine = name
+            return name
+        except TypeError:
+            continue
+    raise SystemExit(
+        "no EEVEE engine found in this Blender build; tried "
+        f"{', '.join(EEVEE_CANDIDATES)}. Use --engine CYCLES instead."
+    )
+
+
+def enable_gpu_compute() -> str | None:
+    """Point Cycles at the best available GPU backend, Metal included."""
+    addon = bpy.context.preferences.addons.get("cycles")
+    if addon is None:
+        return None
+    prefs = addon.preferences
+    for backend in ("METAL", "OPTIX", "CUDA", "HIP", "ONEAPI"):
+        try:
+            prefs.compute_device_type = backend
+        except TypeError:
+            continue
+        try:
+            prefs.get_devices()
+        except Exception:  # noqa: BLE001 -- older builds lack this entirely
+            pass
+        for device in getattr(prefs, "devices", []):
+            device.use = True
+        return backend
+    return None
+
+
+def configure_render(engine: str, samples: int, image_size) -> str:
     scene = bpy.context.scene
-    scene.render.engine = "BLENDER_EEVEE_NEXT" if engine == "EEVEE" else "CYCLES"
+    resolved = select_engine(scene, engine)
     scene.render.resolution_x, scene.render.resolution_y = image_size
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "JPEG"
     scene.render.image_settings.quality = 92
-    if engine == "CYCLES":
+
+    if resolved == "CYCLES":
         scene.cycles.samples = samples
+        backend = enable_gpu_compute()
         try:
-            scene.cycles.device = "GPU"
+            scene.cycles.device = "GPU" if backend else "CPU"
         except (AttributeError, TypeError):
             pass
-    else:
-        scene.eevee.taa_render_samples = samples
+        return f"CYCLES ({backend or 'CPU'})"
+
+    # taa_render_samples is EEVEE's sample count; the attribute name has moved
+    # around, so set it only if this build exposes it.
+    eevee = getattr(scene, "eevee", None)
+    if eevee is not None and hasattr(eevee, "taa_render_samples"):
+        eevee.taa_render_samples = samples
+    return resolved
 
 
 def main() -> int:
@@ -328,6 +382,7 @@ def main() -> int:
 
     rng = random.Random(args.seed)
     worst_overall = 0.0
+    resolved_engine = args.engine
 
     for index, annotation in enumerate(annotations, start=1):
         meta = annotation.meta
@@ -355,7 +410,7 @@ def main() -> int:
 
         add_lighting(str(meta.get("lighting", "daylight-soft")), rng)
         camera = setup_camera(pose)
-        configure_render(args.engine, args.samples, (width, height))
+        resolved_engine = configure_render(args.engine, args.samples, (width, height))
 
         worst_overall = max(worst_overall, verify_labels(camera, annotation, BDO_BOARD, args.tolerance_px))
 
@@ -372,7 +427,8 @@ def main() -> int:
         "scenes": len(annotations),
         "rendered": 0 if args.verify_only else len(annotations),
         "worst_label_error_px": round(worst_overall, 4),
-        "engine": args.engine,
+        "engine": resolved_engine,
+        "blender": bpy.app.version_string,
     }, indent=2))
     return 0
 
