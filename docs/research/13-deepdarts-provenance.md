@@ -50,6 +50,33 @@ Secondary sources disagree, which is itself the finding:
 
 None of these is authoritative. **Do not record a licence for the data until the DataPort page itself has been read.** A CC BY 4.0 result would be a good outcome (commercial use permitted with attribution); anything non-commercial, or terms attached to the *download* rather than the data, would invalidate the current plan for #20 and #22.
 
+### 2.3 IEEE general site terms — the fallback position, not the dataset licence
+
+IEEE's site-wide Terms and Conditions (ieee.org) were read on 2026-09-09. **These are not the dataset's licence** — they govern ieee.org website content generally, and a dataset-specific licence attached to a DataPort record would be a separate, more specific grant that governs that dataset. But they establish what applies **if no per-dataset licence exists**, and that fallback is restrictive:
+
+- *"Nothing on these sites shall be construed as conferring any license under any Copyright Holder's intellectual property rights, whether by estoppel, implication or otherwise."*
+- *"you may not edit, modify, or make use of the Materials without the express, prior written consent of IEEE"*
+- *"any reproduction, distribution, replication, or retransmission of any information contained on these sites without the prior written consent of IEEE is strictly prohibited"*
+- *"IEEE MAY REVOKE ANY OF THE FOREGOING RIGHTS, AS WELL AS ANY ACCESS AND USE AUTHORIZATIONS GRANTED TO USERS OF THESE SITES AT ANY TIME."*
+
+Two consequences:
+
+1. **The estoppel clause forecloses the "it looked permissive" argument.** Availability, 55,659 downloads, an `open-access/` URL, and the paper's "the code and datasets are available" confer nothing. Only an explicit grant counts. This is the same lesson as the unlicensed code repository, restated by IEEE in their own words.
+2. **The no-licence-field branch is now concrete.** If the DataPort record carries no dataset licence, the position is *express prior written consent required* — not a grey area to proceed into.
+
+### 2.4 Recommended escalation: ask the author
+
+Continuing to hunt for a licence field has diminishing returns. **The faster route to a definitive answer is to email William McNally directly** (University of Waterloo, `wmcnally` on GitHub, corresponding author on the paper and submitter of the DataPort record).
+
+He is the party who collected and annotated the data, and the copyright holder of both the images and the unlicensed code. One short email can resolve **both** open questions at once — dataset rights *and* code rights — with a written answer we can file, which is worth more than any inference from a web page. The 55,659 downloads suggest wide permissive intent that simply was never written down.
+
+Ask specifically:
+
+1. May we train a model on the DeepDarts dataset and use the resulting weights in a **commercial** product?
+2. Under what attribution terms?
+3. Is the `deep-darts` code intentionally unlicensed, or would he consider adding a permissive licence?
+4. May a curated derivative representation of the dataset be redistributed (relevant to #22)?
+
 ## 3. Data manifest
 
 | Archive | Contents | Notes |
@@ -187,7 +214,7 @@ The reference model was trained with **occlusion augmentation disabled**, and wi
 
 This session's network egress policy blocks `ieee-dataport.org`, `arxiv.org`, `openaccess.thecvf.com`, and `huggingface.co`. The following could not be verified here:
 
-1. **The dataset licence and terms of use** — *still the gating question.* The DataPort record's description and load instructions have been read and contributed §3; they contain **no licence statement**. The licence lives in a separate metadata field on that page (near the file list / access box), and that field is what must be recorded verbatim, along with any terms accepted at download and whether access requires a subscription.
+1. **The dataset licence and terms of use** — *moved to #23.* The DataPort record's description, load instructions and citation metadata have been read (contributing §1 and §3), and IEEE's general site terms have been read (§2.3). **None of these is the dataset's own licence field**, which remains uncaptured. See §2.4 for the recommended escalation.
 2. ~~Exact image counts and D1/D2 composition~~ — **resolved**, see §3. Archive sizes on disk still unconfirmed.
 3. **Whether trained derivative weights may be used commercially** — if the licence is CC BY 4.0 this is straightforwardly yes with attribution; if it is CC BY-NC or has bespoke DataPort terms, the Brain cannot ship commercially on DeepDarts alone and #20/#22 must be re-planned around our own captured data.
 
