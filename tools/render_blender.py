@@ -37,7 +37,7 @@ import bpy  # noqa: E402  (only importable inside Blender)
 from bpy_extras.object_utils import world_to_camera_view  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
-from dartvision.data.labels import read_jsonl  # noqa: E402
+from dartvision.data.labels import image_filename, read_jsonl  # noqa: E402
 from dartvision.geometry.board import BDO_BOARD, BoardSpec  # noqa: E402
 from dartvision.geometry.camera import CameraPose  # noqa: E402
 from dartvision.synthetic.blender_math import (  # noqa: E402
@@ -495,7 +495,7 @@ def main() -> int:
         worst_overall = max(worst_overall, verify_labels(camera, annotation, BDO_BOARD, args.tolerance_px))
 
         if not args.verify_only:
-            name = annotation.image_id.replace("/", "_") + ".jpg"
+            name = image_filename(annotation.image_id)
             bpy.context.scene.render.filepath = str(args.out / name)
             bpy.ops.render.render(write_still=True)
 

@@ -27,12 +27,23 @@ from enum import Enum
 from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
-__all__ = ["Origin", "Annotation", "read_jsonl", "write_jsonl"]
+__all__ = ["Origin", "Annotation", "image_filename", "read_jsonl", "write_jsonl"]
 
 Point = tuple[float, float]
 
 MAX_DARTS = 3
 VALID_LANDMARK_COUNTS = (4, 8)
+
+
+def image_filename(image_id: str, suffix: str = ".jpg") -> str:
+    """File name for an image id.
+
+    Ids are hierarchical (``setup/session/img-0001``) but file systems are not,
+    so separators become underscores. Shared by the renderer and the dataset:
+    when the two derive this independently they eventually disagree, and the
+    failure looks like missing data rather than a naming mismatch.
+    """
+    return image_id.replace("/", "_") + suffix
 
 
 class Origin(str, Enum):
