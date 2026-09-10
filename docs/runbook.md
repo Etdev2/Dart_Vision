@@ -137,29 +137,89 @@ numerically and silently falls back to CPU for some operators, so you would
 chase bugs that exist on neither. The Mac authors and inspects; the rented box
 measures (#16).
 
+## 6. Train
+
+```bash
+python -m dartvision.train \
+    --manifest data/synthetic/manifest.jsonl \
+    --image-root data/synthetic/images \
+    --out-dir runs/arm-a --split session --epochs 20 --device cuda
+```
+
+Every flag mirrors a field of `TrainConfig`, so `--config run.json` plus
+overrides reproduces a run exactly. The run directory gets `manifest.json`
+(git SHA, config digest, seeds, split digest) written **before** the first
+step, `metrics.jsonl` appended per epoch, and `last.pt` rewritten per epoch.
+
+Training never sees the test partition. `apply_split` has no code path that
+returns it -- not a convention, a missing branch.
+
+Sanity check before committing to a long run: `--limit 32 --epochs 30` on a
+handful of images should drive the loss most of the way to zero. If a model
+cannot overfit 32 images it will not learn 3,000, and you have found a bug for
+the price of two minutes.
+
+## 7. Evaluate
+
+```bash
+python -m dartvision.eval \
+    --checkpoint runs/arm-a/last.pt \
+    --manifest data/synthetic/manifest.jsonl \
+    --image-root data/synthetic/images \
+    --split session --partition test \
+    --ledger runs/holdout.json --out-dir runs/arm-a/eval
+```
+
+Prints and writes #21's gate report: calibratable rate, landmark and tip error
+in **board millimetres** (not pixels), per-dart accuracy, legs error-free with
+and without flagging, and #14's margin cross-tab separating "the model was
+imprecise" from "the dart was on the wire".
+
+Three things about this command are deliberate:
+
+- **There is no argument for which images to score.** The tier and seed define
+  the test partition; the evaluator derives it the same way training derived
+  what to avoid. It cannot be widened by the caller.
+- **`--ledger` refuses a second read** of the same checkpoint and split without
+  `--override` and a written reason, which is logged. A test set read fifty
+  times during tuning is a validation set, and the project then has no holdout.
+- **The homography comes from the *predicted* landmarks**, never the true ones.
+  Rectifying with ground truth hides the largest error source in the system and
+  reports a number the product will never see.
+
+Use `--partition val` while tuning. It touches nothing in the ledger.
+
 ## What is already built
 
 | Component | State |
 | --- | --- |
 | Board geometry and deterministic scoring | Done, tested |
 | Calibration landmarks and homography | Done, tested |
-| Annotation contract | Done, tested |
+| Annotation contract and leakage-safe splits | Done, tested |
 | Metrics (#14) and ship gates (#21) | Done, tested |
 | Scene sampling and dataset generation (#25) | Done, tested |
-| Blender renderer | Written; **unrun** -- step 3 is its first real test |
-| Model heads (#15, #17) | Not started -- needs PyTorch |
-| Training loop, config, container (#16, #17) | Not started |
+| Blender renderer | Done -- verified against Blender's own camera to 0.003 px |
+| Model heads and losses (#15, #17) | Done, tested; overfits a small set |
+| Training loop, config, provenance (#16, #17) | Done, tested |
+| Evaluation CLI and gate report (#14, #21) | Done, tested |
+| Real capture (#26) | Waiting on photographs |
+| Core ML export and the app (#1) | Not started |
+
+Everything above the capture row runs today. What the project is short of is
+data, not code.
 
 ## What to expect to go wrong
 
-The renderer is the only substantial piece never executed. Likely snags, in
-order of probability:
-
-1. **Blender API drift.** `BLENDER_EEVEE_NEXT` is the 4.2+ engine name; older
-   builds use `BLENDER_EEVEE`. If the engine string is rejected, that is the fix.
+1. **Blender API drift.** Engine names move between releases; the renderer
+   tries `BLENDER_EEVEE_NEXT` then `BLENDER_EEVEE`. If a future build rejects
+   both, that list is the fix.
 2. **Materials look wrong before they look broken.** Colours and roughness are
-   first guesses, not matched to a real board. Geometry correctness is what step
-   3 verifies; appearance is a tuning pass afterwards.
+   first guesses, not matched to a real board. Geometry correctness is what
+   step 3 verifies; appearance is a tuning pass afterwards.
 3. **Dart geometry is crude** -- a cylinder, a point and a flat flight. Good
-   enough to occlude and cast shadows, not good enough to fool anyone. Refine
-   after the pipeline runs end to end, not before.
+   enough to occlude and cast shadows, not good enough to fool anyone.
+4. **A loss that falls while nothing is learned.** The tip head puts every dart
+   in one channel, so anything deciding "positive" per channel supervises all
+   but the strongest tip as background -- and the total loss still drops. Twelve
+   unit tests passed with exactly that bug present; only the overfit check
+   caught it. Trust the overfit check, not the loss curve.
