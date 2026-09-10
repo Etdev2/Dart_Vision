@@ -75,18 +75,37 @@ def evaluate_frame(
             calibratable=False, landmark_error_mm=None, records=[],
         )
 
-    truth_board = _to_board(annotation.landmarks, annotation.tips, board)
+    truth_homography = estimate_homography(annotation.landmarks, board=board)
+    truth_board = (
+        truth_homography.to_board(annotation.tips)
+        if annotation.tips else np.zeros((0, 2))
+    )
     predicted_board = _to_board(
         predicted_landmarks, [p for p, _ in predicted_tips], board
     )
 
     # Landmark quality, measured where it matters: in board millimetres after
     # rectification, not in image pixels.
-    truth_landmarks = _to_board(annotation.landmarks, annotation.landmarks, board)
-    predicted_as_board = _to_board(predicted_landmarks, predicted_landmarks, board)
-    landmark_error = float(
-        np.linalg.norm(predicted_as_board - truth_landmarks, axis=1).mean()
-    )
+    #
+    # Both sets go through the *same* homography -- the true one. Mapping each
+    # through its own would refit away the very error being measured: a uniform
+    # shift of every landmark is itself a homography, so a set displaced bodily
+    # off the wires would report zero error while sending every tip to the wrong
+    # bed. Only landmarks present in both sets can be compared.
+    common = [
+        i
+        for i in range(min(len(annotation.landmarks), len(predicted_landmarks)))
+        if annotation.landmarks[i] is not None and predicted_landmarks[i] is not None
+    ]
+    landmark_error: float | None = None
+    if common:
+        landmark_error = float(
+            np.linalg.norm(
+                truth_homography.to_board([predicted_landmarks[i] for i in common])
+                - truth_homography.to_board([annotation.landmarks[i] for i in common]),
+                axis=1,
+            ).mean()
+        )
 
     records: list[ThrowRecord] = []
     for match in match_tips(

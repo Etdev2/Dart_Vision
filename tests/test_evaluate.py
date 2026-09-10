@@ -124,12 +124,57 @@ def test_a_wildly_wrong_tip_is_a_phantom_and_a_miss():
 def test_landmark_error_is_measured_in_board_millimetres():
     """Not image pixels -- #15 showed landmark error amplifies through the homography."""
     scene = scene_and_labels()
-    nudged = [(x + 0.002, y) for x, y in scene.annotation.landmarks]
+    tips = [(t, 0.9) for t in scene.annotation.tips]
+
+    small = evaluate_frame(
+        scene.annotation,
+        [(x + 0.002, y) for x, y in scene.annotation.landmarks], tips,
+    )
+    large = evaluate_frame(
+        scene.annotation,
+        [(x + 0.010, y) for x, y in scene.annotation.landmarks], tips,
+    )
+
+    # Millimetres, and proportional to the displacement -- a 5x larger nudge
+    # must read roughly 5x larger, not merely non-zero.
+    assert small.landmark_error_mm == pytest.approx(1.03, abs=0.05)
+    assert large.landmark_error_mm == pytest.approx(5.0 * small.landmark_error_mm, rel=0.02)
+
+
+def test_a_bodily_displaced_landmark_set_is_not_refitted_away():
+    """The error must be measured through the *true* rectification.
+
+    Mapping each landmark set through its own homography cancels exactly the
+    error being measured: a uniform shift of every landmark is itself a
+    homography, so it refits perfectly and reports zero -- while sending every
+    tip in the frame to the wrong place. The tip error below is the proof that
+    the frame really is damaged.
+    """
+    scene = scene_and_labels(tips_mm=[(0.0, 140.0)])
+    annotation = scene.annotation
+    shifted = [(x + 0.01, y + 0.01) for x, y in annotation.landmarks]
+
+    result = evaluate_frame(annotation, shifted, [(annotation.tips[0], 0.9)])
+
+    assert result.landmark_error_mm > 1.0
+    assert result.records[0].tip_error_mm > 1.0
+
+
+def test_an_occluded_landmark_still_leaves_a_scoreable_frame():
+    """Real captures will lose a landmark to a hand or a dart. Seven of eight
+    is a homography, not a failure."""
+    scene = scene_and_labels()
+    partial = list(scene.annotation.landmarks)
+    partial[2] = None
 
     result = evaluate_frame(
-        scene.annotation, nudged, [(t, 0.9) for t in scene.annotation.tips]
+        scene.annotation, partial, [(t, 0.9) for t in scene.annotation.tips]
     )
-    assert result.landmark_error_mm is not None and result.landmark_error_mm > 0.0
+    assert result.calibratable
+    assert len(result.records) == 3
+    assert all(r.correct for r in result.records)
+    # The seven surviving landmarks were predicted exactly.
+    assert result.landmark_error_mm == pytest.approx(0.0, abs=1e-6)
 
 
 def test_the_homography_comes_from_predicted_landmarks_not_truth():

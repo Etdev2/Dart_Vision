@@ -46,6 +46,7 @@ First implementation, on the `prototype/` track for #17:
 - `src/dartvision/events.py` — the canonical `ThrowEvent`, calibration status, and the confirmation policy.
 - `src/dartvision/data/splits.py` — leakage-safe splits for [#14](https://github.com/Etdev2/Dart_Vision/issues/14)'s tiers, plus a ledger enforcing holdout discipline.
 - `src/dartvision/data/torch_dataset.py` — training dataset over a scene manifest, with label-safe photometric jitter.
+- `src/dartvision/audit/` — [#14](https://github.com/Etdev2/Dart_Vision/issues/14) §7's dataset verification checks: schema conformance, session grouping, perceptual-hash near-duplicates, effective dataset size, dart-count balance and the margin-to-boundary distribution.
 - `src/dartvision/eval/` — tip matching, the checkpoint evaluation CLI, and the [#21](https://github.com/Etdev2/Dart_Vision/issues/21) gate report. Rectifies with the *predicted* landmarks, so landmark error is measured where it actually hurts.
 - `src/dartvision/train/` — the training loop, run configuration, and the provenance every run records ([#16](https://github.com/Etdev2/Dart_Vision/issues/16)'s reproducibility contract).
 - `src/dartvision/model/net.py` — the two-head Brain from [#15](https://github.com/Etdev2/Dart_Vision/issues/15): heatmap landmarks + point-detection tips on a shared `timm` backbone. Needs `pip install -e '.[train]'`.
@@ -63,7 +64,7 @@ Generate a scene manifest for a renderer to consume:
 python -m dartvision.synthetic.generate --out data/synthetic --setups 3 --sessions 4 --images 40
 ```
 
-405 tests.
+446 tests.
 
 Train a smoke run once a manifest is rendered:
 
@@ -72,6 +73,17 @@ python -m dartvision.train --manifest data/synthetic/manifest.jsonl \
     --image-root data/synthetic/images --out-dir runs/smoke \
     --epochs 3 --limit 64 --input-height 256 --input-width 256 --device cpu
 ```
+
+Check a corpus before trusting a number computed on it:
+
+```bash
+python -m dartvision.audit --manifest data/synthetic/manifest.jsonl \
+    --image-root data/synthetic/images --split session
+```
+
+Exits non-zero when the corpus is unsound, so it can gate a run rather than
+merely inform one. It answers the question that decides whether an accuracy
+figure means anything: are there darts near a wire at all?
 
 Score a checkpoint against a benchmark tier:
 

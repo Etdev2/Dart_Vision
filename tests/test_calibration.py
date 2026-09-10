@@ -19,6 +19,7 @@ from dartvision.geometry.calibration import (
     calibration_points_4,
     calibration_points_8,
     estimate_homography,
+    visible_landmarks,
 )
 
 
@@ -217,3 +218,62 @@ def test_accepts_a_correctly_ordered_projection_at_steep_angles():
 def test_collinear_landmarks_are_not_usable():
     collinear = [(0.0, 0.0), (10.0, 0.0), (20.0, 0.0), (30.0, 0.0)]
     assert not assess_landmarks(collinear).usable
+
+
+# --------------------------------------------------------------------------
+# Partial landmark sets
+# --------------------------------------------------------------------------
+
+def test_visible_landmarks_reports_slots_not_positions():
+    assert visible_landmarks([(0.0, 0.0), None, (1.0, 1.0), None]) == [0, 2]
+
+
+def test_an_occluded_landmark_drops_its_board_partner():
+    """The pairing is by slot. Compacting the image points without compacting
+    the board points the same way would match landmark 3 to landmark 2's board
+    coordinate and quietly produce a plausible, wrong homography."""
+    h = board_to_image_homography(elevation_deg=35.0, azimuth_deg=15.0)
+    observed = [tuple(p) for p in project(h, calibration_points_8())]
+
+    full = estimate_homography(observed)
+    for missing in range(8):
+        partial = list(observed)
+        partial[missing] = None
+        estimated = estimate_homography(partial)
+
+        # Both must rectify a known point to the same place.
+        probe = project(h, [(40.0, -90.0)])
+        assert estimated.to_board(probe)[0] == pytest.approx(
+            full.to_board(probe)[0], abs=1e-6
+        )
+
+
+def test_four_survivors_are_enough_and_three_are_not():
+    h = board_to_image_homography(elevation_deg=30.0)
+    observed = [tuple(p) for p in project(h, calibration_points_8())]
+
+    four = list(observed)
+    for i in (1, 3, 5, 7):
+        four[i] = None
+    assert estimate_homography(four).to_board(project(h, [(0.0, 0.0)]))[0] == (
+        pytest.approx((0.0, 0.0), abs=1e-6)
+    )
+
+    three = list(four)
+    three[0] = None
+    with pytest.raises(ValueError, match="at least 4 correspondences"):
+        estimate_homography(three)
+
+
+def test_assess_landmarks_tolerates_a_missing_landmark():
+    h = board_to_image_homography(elevation_deg=30.0)
+    observed = [tuple(p) for p in project(h, calibration_points_8())]
+    partial = list(observed)
+    partial[4] = None
+
+    quality = assess_landmarks(partial)
+    assert quality.convex_and_ordered
+    # Seven correspondences still over-determine the fit, so the residual
+    # remains a real signal rather than an identically-zero number.
+    assert quality.residual_mm is not None
+    assert quality.residual_mm < 1e-6

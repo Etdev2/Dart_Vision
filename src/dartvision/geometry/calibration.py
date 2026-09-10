@@ -37,6 +37,7 @@ __all__ = [
     "calibration_points_8",
     "Homography",
     "estimate_homography",
+    "visible_landmarks",
     "HomographyQuality",
     "assess_landmarks",
 ]
@@ -117,29 +118,51 @@ def _normalize(pts: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return (centred * scale), t
 
 
+def visible_landmarks(image_points: Sequence[Sequence[float] | None]) -> list[int]:
+    """Indices of the landmarks that were actually found.
+
+    Landmark *slot* is what identifies a point, not its position in a compacted
+    list. A detector that misses the third landmark must not have the fourth
+    silently take its board coordinates.
+    """
+    return [i for i, point in enumerate(image_points) if point is not None]
+
+
 def estimate_homography(
-    image_points: Sequence[Sequence[float]],
+    image_points: Sequence[Sequence[float] | None],
     board_points: Sequence[Sequence[float]] | None = None,
     board: BoardSpec = BDO_BOARD,
 ) -> Homography:
     """Estimate the image-to-board homography by normalized DLT.
 
-    ``image_points`` must be in the fixed landmark order. With four points the
-    solution is exact; with more it is least-squares, which both averages down
-    noise and makes the residual from :func:`assess_landmarks` meaningful.
+    ``image_points`` must be in the fixed landmark order. Entries may be
+    ``None`` for landmarks that were occluded or not detected; they are dropped
+    along with their board partners, so a partial set still yields a homography
+    as long as four landmarks survive. ``board_points``, when given, is indexed
+    the same way -- one entry per landmark slot, including the missing ones.
+
+    With four surviving points the solution is exact; with more it is
+    least-squares, which both averages down noise and makes the residual from
+    :func:`assess_landmarks` meaningful.
     """
-    src = np.asarray(image_points, dtype=float).reshape(-1, 2)
-    if len(src) < 4:
+    points = list(image_points)
+    kept = visible_landmarks(points)
+    if len(kept) < 4:
         raise ValueError(
-            f"a homography needs at least 4 correspondences, got {len(src)}"
+            f"a homography needs at least 4 correspondences, got {len(kept)}"
         )
 
     if board_points is None:
-        board_points = _default_board_points(len(src), board)
-    dst = np.asarray(board_points, dtype=float).reshape(-1, 2)
+        board_points = _default_board_points(len(points), board)
+    board_points = list(board_points)
 
-    if len(src) != len(dst):
-        raise ValueError(f"got {len(src)} image points but {len(dst)} board points")
+    if len(points) != len(board_points):
+        raise ValueError(
+            f"got {len(points)} image points but {len(board_points)} board points"
+        )
+
+    src = np.asarray([points[i] for i in kept], dtype=float).reshape(-1, 2)
+    dst = np.asarray([board_points[i] for i in kept], dtype=float).reshape(-1, 2)
 
     src_n, t_src = _normalize(src)
     dst_n, t_dst = _normalize(dst)
@@ -191,7 +214,7 @@ def _is_convex_in_order(pts: np.ndarray) -> bool:
 
 
 def assess_landmarks(
-    image_points: Sequence[Sequence[float]],
+    image_points: Sequence[Sequence[float] | None],
     board: BoardSpec = BDO_BOARD,
 ) -> HomographyQuality:
     """Check a landmark set for the failure modes that four points can reveal.
@@ -203,11 +226,13 @@ def assess_landmarks(
     near-degenerate configuration, and -- with more than four landmarks -- a
     genuine least-squares residual.
     """
-    src = np.asarray(image_points, dtype=float).reshape(-1, 2)
-    ordered = _is_convex_in_order(src[:4])
+    points = list(image_points)
+    kept = visible_landmarks(points)
+    src = np.asarray([points[i] for i in kept], dtype=float).reshape(-1, 2)
+    ordered = len(src) >= 4 and _is_convex_in_order(src[:4])
 
     try:
-        h = estimate_homography(src, board=board)
+        h = estimate_homography(points, board=board)
         condition = float(np.linalg.cond(h.matrix))
     except (ValueError, np.linalg.LinAlgError):
         return HomographyQuality(
@@ -216,7 +241,10 @@ def assess_landmarks(
 
     residual: float | None = None
     if len(src) > 4:
-        expected = np.asarray(_default_board_points(len(src), board), dtype=float)
+        # Compare each surviving landmark against *its own* board coordinate,
+        # selected by slot -- a compacted list would pair them wrongly.
+        canonical = _default_board_points(len(points), board)
+        expected = np.asarray([canonical[i] for i in kept], dtype=float)
         errors = np.linalg.norm(h.to_board(src) - expected, axis=1)
         residual = float(np.sqrt((errors ** 2).mean()))
 

@@ -120,6 +120,41 @@ sub-millimetre on the board (#15).
 The header shows clicks spent against clicks if every frame were labelled
 independently. That ratio is the reason this is a weekend rather than a month.
 
+## 4c. Audit the corpus before trusting anything computed on it
+
+```bash
+python -m dartvision.audit --manifest data/synthetic/manifest.jsonl \
+    --image-root data/synthetic/images --split session --out audit.json
+```
+
+This is #14 §7's checklist, executable. It exits non-zero when the corpus is
+unsound, so it can gate a run rather than merely inform one.
+
+| Check | Fails when |
+| --- | --- |
+| `schema` | duplicate ids, mixed landmark counts, an id disagreeing with its session |
+| `split_grouping` | a session spans two partitions -- the leak that matters most |
+| `cross_session_duplicates` | a near-duplicate frame appears in two sessions |
+| `effective_size` | *(warns)* the corpus carries less information than its file count suggests |
+| `darts_per_image` | *(warns)* a dart count from 0 to 3 is barely represented |
+| `margin_distribution` | *(warns)* almost no dart lands near a wire |
+
+The last one is the one to read first, and the least obvious. A dart three
+millimetres inside the treble bed is scored correctly by a model with three
+millimetres of error and by one with none; only darts near a wire tell them
+apart. A corpus without them yields a high accuracy that says nothing about
+the failure mode that actually costs points. The synthetic generator samples
+margins deliberately for exactly this reason -- roughly two thirds of its darts
+land within 3 mm of a wire.
+
+A warning is not noise to be silenced. A corpus can pass every hard check and
+still be unable to measure the thing being gated on.
+
+Run it again after every capture session (#26). It is the cheapest place to
+catch a mis-sorted folder: two sessions holding the same frames look fine to
+everything else in the pipeline and quietly turn a cross-session number into a
+within-session one.
+
 ## 5. Rent a GPU for training
 
 Only training needs rented hardware. RTX 4090 on RunPod Community is about
@@ -202,6 +237,7 @@ Use `--partition val` while tuning. It touches nothing in the ledger.
 | Model heads and losses (#15, #17) | Done, tested; overfits a small set |
 | Training loop, config, provenance (#16, #17) | Done, tested |
 | Evaluation CLI and gate report (#14, #21) | Done, tested |
+| Dataset audit -- #14 §7's checks | Done, tested |
 | Real capture (#26) | Waiting on photographs |
 | Core ML export and the app (#1) | Not started |
 
