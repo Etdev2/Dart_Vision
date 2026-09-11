@@ -30,6 +30,8 @@ The vision model is planned as a standalone, versioned AI engine rather than tra
 
 **[`docs/runbook.md`](./docs/runbook.md)** — day-one sequence from clone to a rendered dataset.
 
+**[`docs/licence-register.md`](./docs/licence-register.md)** — every third-party component, its licence, and whether anyone has read it from source. Checked by a test: adding a dependency without recording its licence fails the build.
+
 **[`docs/capture-protocol.md`](./docs/capture-protocol.md)** — how to photograph and annotate your own board.
 
 ```bash
@@ -67,7 +69,7 @@ Generate a scene manifest for a renderer to consume:
 python -m dartvision.synthetic.generate --out data/synthetic --setups 3 --sessions 4 --images 40
 ```
 
-531 tests.
+539 tests.
 
 Train a smoke run once a manifest is rendered:
 
