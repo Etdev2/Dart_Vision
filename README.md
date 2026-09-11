@@ -44,6 +44,7 @@ First implementation, on the `prototype/` track for #17:
 - `src/dartvision/geometry/calibration.py` — calibration landmarks and the image-to-board homography.
 - `src/dartvision/data/labels.py` — the annotation contract, shared by synthetic (#25) and captured (#26) data.
 - `src/dartvision/events.py` — the canonical `ThrowEvent`, calibration status, and the confirmation policy.
+- `src/dartvision/stream/` — the temporal layer ([#3](https://github.com/Etdev2/Dart_Vision/issues/3)): per-frame detections in, throws out. Its job is memory, not detection — a dart hidden behind a later dart was seen when it landed, and [#2](https://github.com/Etdev2/Dart_Vision/issues/2) measured that this happens to about a fifth of tightly grouped darts at every camera angle.
 - `src/dartvision/data/splits.py` — leakage-safe splits for [#14](https://github.com/Etdev2/Dart_Vision/issues/14)'s tiers, plus a ledger enforcing holdout discipline.
 - `src/dartvision/data/torch_dataset.py` — training dataset over a scene manifest, with label-safe photometric jitter.
 - `src/dartvision/audit/` — [#14](https://github.com/Etdev2/Dart_Vision/issues/14) §7's dataset verification checks: schema conformance, session grouping, perceptual-hash near-duplicates, effective dataset size, dart-count balance and the margin-to-boundary distribution.
@@ -64,7 +65,7 @@ Generate a scene manifest for a renderer to consume:
 python -m dartvision.synthetic.generate --out data/synthetic --setups 3 --sessions 4 --images 40
 ```
 
-446 tests.
+469 tests.
 
 Train a smoke run once a manifest is rendered:
 
