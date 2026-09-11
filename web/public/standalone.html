@@ -2,71 +2,68 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Dart Vision</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%231c1917'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%23b91c1c'/%3E%3Ccircle cx='8' cy='8' r='1.5' fill='%2315803d'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2318181b'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23b91c1c' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='none' stroke='%2315803d' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315803d'/%3E%3C/svg%3E">
 <style>
   :root { --bg:#f8fafc; --panel:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
-          --accent:#2563eb; --ok:#059669; --warn:#b45309; --bad:#dc2626; --tip:#dc2626; }
+          --accent:#2563eb; --ok:#059669; --warn:#b45309; --bad:#dc2626; }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#0f172a; --panel:#1e293b; --ink:#e2e8f0; --muted:#94a3b8; --line:#334155;
             --accent:#60a5fa; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  /* A class that sets `display` outranks the UA's [hidden] rule. */
   [hidden] { display:none !important; }
-  body { margin:0; font:15px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif;
-         background:var(--bg); color:var(--ink);
-         padding:0 0 env(safe-area-inset-bottom); }
-  header { display:flex; gap:8px; align-items:center; padding:10px 14px;
-           border-bottom:1px solid var(--line); background:var(--panel);
-           position:sticky; top:0; z-index:10; }
-  h1 { font-size:15px; margin:0; font-weight:650; letter-spacing:-.01em; }
+  body { margin:0; background:var(--bg); color:var(--ink); padding-bottom:env(safe-area-inset-bottom);
+         font:15px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif; }
+  header { display:flex; gap:8px; align-items:center; padding:10px 14px; background:var(--panel);
+           border-bottom:1px solid var(--line); position:sticky; top:0; z-index:10; }
+  header h1 { font-size:15px; margin:0; font-weight:650; letter-spacing:-.01em; }
   .tabs { margin-left:auto; display:flex; gap:4px; }
-  .tab { border:1px solid var(--line); background:transparent; color:var(--muted);
-         padding:6px 12px; border-radius:999px; font:inherit; font-size:13px; cursor:pointer; }
+  .tab { border:1px solid var(--line); background:transparent; color:var(--muted); padding:6px 12px;
+         border-radius:999px; font:inherit; font-size:13px; cursor:pointer; }
   .tab[aria-selected="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
   main { padding:14px; max-width:640px; margin:0 auto; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
-          padding:14px; margin-bottom:12px; }
-  .stage { position:relative; background:#000; border-radius:12px; overflow:hidden;
-           aspect-ratio:3/4; display:flex; align-items:center; justify-content:center; }
-  .stage canvas, .stage video { position:absolute; inset:0; width:100%; height:100%;
-                                object-fit:contain; }
-  .stage .hint { color:#94a3b8; font-size:13px; padding:24px; text-align:center; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 10px; font-weight:600; }
   .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   button, label.file { border:1px solid var(--line); background:var(--panel); color:var(--ink);
-           padding:9px 14px; border-radius:9px; font:inherit; font-size:14px; cursor:pointer;
-           min-height:40px; }
+    padding:9px 14px; border-radius:9px; font:inherit; font-size:14px; cursor:pointer; min-height:40px; }
   button.primary, label.file { background:var(--accent); border-color:var(--accent); color:#fff; }
   button:disabled { opacity:.45; cursor:default; }
   label.file input { display:none; }
+  .stage { position:relative; background:#000; border-radius:12px; overflow:hidden; aspect-ratio:3/4;
+           display:flex; align-items:center; justify-content:center; }
+  .stage canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+  .stage .hint { color:#94a3b8; font-size:13px; padding:24px; text-align:center; }
   .verdict { display:flex; gap:10px; align-items:flex-start; }
   .dot { width:10px; height:10px; border-radius:50%; margin-top:7px; flex:none; }
-  .ready .dot { background:var(--ok); } .marginal .dot { background:var(--warn); }
-  .unusable .dot { background:var(--bad); }
+  .ready .dot { background:var(--ok); } .marginal .dot { background:var(--warn); } .unusable .dot { background:var(--bad); }
   .headline { font-weight:650; font-size:17px; letter-spacing:-.01em; }
   .detail { color:var(--muted); font-size:14px; }
-  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(108px,1fr)); gap:10px;
-           margin-top:12px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(108px,1fr)); gap:10px; margin-top:12px; }
   .stat { background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:9px 10px; }
   .stat b { display:block; font-size:19px; font-weight:650; letter-spacing:-.02em; }
-  .stat span { color:var(--muted); font-size:11.5px; text-transform:uppercase;
-               letter-spacing:.04em; }
-  .target { display:flex; gap:12px; align-items:center; }
-  .target svg { flex:none; }
+  .stat span { color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; }
+  .target { display:flex; gap:12px; align-items:center; } .target svg { flex:none; }
+  .scoreboard { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
+  .player { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .player.active { border-color:var(--accent); box-shadow:inset 3px 0 0 var(--accent); }
+  .player.busted { border-color:var(--bad); box-shadow:inset 3px 0 0 var(--bad); }
+  .player.busted .detail { color:var(--bad); }
+  .player .who { font-size:13px; color:var(--muted); font-weight:600; }
+  .player .legs { color:var(--accent); }
+  .player b { display:block; font-size:34px; font-weight:700; letter-spacing:-.03em; line-height:1.1; }
+  .player .detail { font-size:12px; }
+  .banner { background:var(--accent); color:#fff; border-radius:10px; padding:12px 14px; display:flex;
+            gap:12px; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; }
+  .banner .headline { font-size:18px; }
+  .banner button { background:#fff; color:var(--accent); border-color:#fff; }
   .big { font-size:30px; font-weight:700; letter-spacing:-.02em; }
-  #match-prompt { min-height:66px; }
-  /* Reserved, not grown into: the throws row appearing after the first dart
-     used to shift the board 31px down mid-visit, so the second tap missed. */
-  .throws { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; min-height:30px; }
-  .throw { border:1px solid var(--line); border-radius:8px; padding:5px 9px; font-size:13px;
-           background:var(--bg); }
+  .prompt-block { min-height:70px; }
+  .throws { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; min-height:32px; }
+  .throw { border:1px solid var(--line); border-radius:8px; padding:5px 9px; font-size:13px; background:var(--bg); }
   .throw.unsure { border-color:var(--warn); color:var(--warn); }
   .throw.corrected { border-color:var(--accent); color:var(--accent); }
   .note { color:var(--muted); font-size:13px; }
-  .note code { background:var(--bg); border:1px solid var(--line); border-radius:4px;
-               padding:1px 5px; font-size:12px; }
-  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);
-       margin:0 0 10px; font-weight:600; }
 </style>
 
 <header>
@@ -78,7 +75,6 @@
 </header>
 
 <main>
-  <!-- ------------------------------------------------ Mount check -->
   <section id="view-mount">
     <div class="card">
       <h2>Where should the phone go?</h2>
@@ -88,40 +84,23 @@
         focal length, no distance, no protractor.
       </p>
       <div class="row">
-        <label class="file">Take a photo
-          <input type="file" id="photo" accept="image/*" capture="environment">
-        </label>
-        <button id="use-camera">Use live camera</button>
+        <label class="file">Take a photo<input type="file" id="photo" accept="image/*" capture="environment"></label>
         <button id="reset-marks" disabled>Start marks again</button>
       </div>
     </div>
-
-    <div class="stage" id="mount-stage">
+    <div class="stage">
       <div class="hint" id="mount-hint">Take a photo of your board to begin.</div>
-      <video id="video" playsinline autoplay muted hidden></video>
       <canvas id="mount-canvas" hidden></canvas>
     </div>
-    <div class="row" id="camera-row" style="margin-top:10px" hidden>
-      <button class="primary" id="freeze">Freeze frame</button>
-    </div>
-
     <div class="card" id="target-card" style="margin-top:12px" hidden>
       <div class="target">
         <svg id="target-map" width="86" height="86" viewBox="-196 -196 392 392"></svg>
-        <div>
-          <div class="headline" id="target-name">—</div>
-          <div class="detail" id="target-detail">—</div>
-        </div>
+        <div><div class="headline" id="target-name">—</div><div class="detail" id="target-detail">—</div></div>
       </div>
     </div>
-
     <div class="card" id="verdict-card" hidden>
-      <div class="verdict" id="verdict">
-        <div class="dot"></div>
-        <div>
-          <div class="headline" id="verdict-headline">—</div>
-          <div class="detail" id="verdict-detail">—</div>
-        </div>
+      <div class="verdict" id="verdict"><div class="dot"></div>
+        <div><div class="headline" id="verdict-headline">—</div><div class="detail" id="verdict-detail">—</div></div>
       </div>
       <div class="stats">
         <div class="stat"><b id="s-elev">—</b><span>Elevation</span></div>
@@ -136,334 +115,1344 @@
     </div>
   </section>
 
-  <!-- ------------------------------------------------ Match loop -->
   <section id="view-match" hidden>
+    <div id="banner-slot"></div>
     <div class="card">
-      <div class="verdict" id="match-prompt">
-        <div>
-          <div class="big" id="m-headline">Ready</div>
-          <div class="detail" id="m-detail">Throw when you are.</div>
-        </div>
-      </div>
+      <h2 id="leg-label">Leg 1</h2>
+      <div class="scoreboard" id="scoreboard"></div>
+    </div>
+    <div class="card">
+      <div class="prompt-block"><div class="big" id="m-headline">Ready</div><div class="detail" id="m-detail">Throw when you are.</div></div>
       <div class="throws" id="m-throws"></div>
       <div class="row" id="m-actions" style="margin-top:12px"></div>
     </div>
-
     <div class="card">
       <h2 id="m-boardlabel">Tap the board to throw</h2>
-      <canvas id="board" width="560" height="560"
-              style="width:100%;height:auto;touch-action:manipulation"></canvas>
+      <canvas id="board" width="560" height="560" style="width:100%;height:auto;touch-action:manipulation"></canvas>
       <div class="row" style="margin-top:10px">
         <label style="font-size:13px;color:var(--muted)">Model confidence
-          <input type="range" id="conf" min="0.5" max="1" step="0.01" value="0.97"
-                 style="vertical-align:middle">
+          <input type="range" id="conf" min="0.5" max="1" step="0.01" value="0.97" style="vertical-align:middle">
           <b id="conf-value" style="font-variant-numeric:tabular-nums">0.97</b>
         </label>
       </div>
       <p class="note" style="margin:10px 0 0">
-        Uncertain darts still score instantly — the question waits until the
-        visit ends, which is when you would be pulling darts out anyway. Tap
-        near a wire to see it happen.
+        Uncertain darts still score instantly — the question waits until the visit
+        ends, which is when you would be pulling darts out anyway. Drop the
+        confidence, or throw near a wire, to see it happen.
       </p>
     </div>
   </section>
 </main>
 
 <script type="module">
-import { BDO_BOARD, SECTORS_CLOCKWISE_FROM_20, scoreAt } from './lib/board.js';
-import { CALIBRATION_ANGLES_DEG, calibrationPoints } from './lib/homography.js';
-import { assessFraming } from './lib/framing.js';
-import { MatchSession, CONFIRMING, NOT_CALIBRATED } from './lib/match.js';
+/* ---- lib/board.js ---- */
+const __board = (() => {
+/**
+ * Deterministic dartboard geometry and scoring.
+ *
+ * A direct port of `src/dartvision/geometry/board.py`. The Python is the
+ * reference implementation and its test suite is the specification;
+ * `web/test/parity.test.mjs` checks the two agree on fixtures generated from
+ * the Python itself, because a port that silently disagrees is worse than no
+ * port at all.
+ *
+ * Plain ES modules rather than TypeScript on purpose: they run in a browser
+ * today with no build step, and Next.js imports them unchanged. The JSDoc
+ * types are real types under `checkJs`.
+ *
+ * Board coordinates are millimetres, origin at the bull, +x right and +y up.
+ * Angles run counter-clockwise from +x. The 20 bed is centred on +y.
+ */
+
+/** Sector numbers clockwise from 20, which sits at the top. */
+const SECTORS_CLOCKWISE_FROM_20 = Object.freeze([
+  20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5,
+]);
+
+const SECTOR_ARC_DEG = 360 / 20;
+/** The 20 bed is centred at 90 degrees, so its counter-clockwise edge is 99. */
+const FIRST_BOUNDARY_DEG = 90 + SECTOR_ARC_DEG / 2;
+
+const DEG = 180 / Math.PI;
+
+/**
+ * Distance from the bull.
+ *
+ * A note on portability, because it was measured rather than assumed. Python's
+ * `math.hypot` is correctly rounded; neither `Math.hypot` nor `sqrt(x*x+y*y)`
+ * reproduces it bit-for-bit, and the two JS forms disagree with each other too.
+ * Across the parity fixtures every such disagreement lands **within 1e-9 mm of
+ * a boundary radius** and none anywhere else -- so scoring is exactly portable
+ * except for a point sitting on a wire to within a picometre, where the float
+ * representation decides and no implementation is canonical.
+ *
+ * That is a measure-zero case a physical dart never reaches, and
+ * `parity.test.mjs` pins the property rather than pretending it away.
+ *
+ * @param {number} x @param {number} y
+ */
+const radius = (x, y) => Math.hypot(x, y);
+
+/**
+ * @typedef {object} BoardSpec
+ * @property {number} rBoard        full radius, including the number ring
+ * @property {number} rDouble       outer edge of the double ring
+ * @property {number} rTreble       outer edge of the treble ring
+ * @property {number} rOuterBull    outer edge of the 25 ring
+ * @property {number} rInnerBull    outer edge of the bullseye
+ * @property {number} ringWidth     radial width of the double and treble rings
+ */
+
+/** BDO standard measurements. @type {BoardSpec} */
+const BDO_BOARD = Object.freeze({
+  rBoard: 225.5,
+  rDouble: 170.0,
+  rTreble: 107.4,
+  rOuterBull: 15.9,
+  rInnerBull: 6.35,
+  ringWidth: 10.0,
+});
+
+/** @param {BoardSpec} b */
+const rDoubleInner = (b) => b.rDouble - b.ringWidth;
+/** @param {BoardSpec} b */
+const rTrebleInner = (b) => b.rTreble - b.ringWidth;
+
+/**
+ * @typedef {object} Hit
+ * @property {number} segment     bed number, or 25 for either bull
+ * @property {number} multiplier  0 miss, 1 single, 2 double, 3 treble
+ * @property {number} score
+ * @property {string} notation
+ */
+
+/** @param {number} angleDeg */
+function sectorIndex(angleDeg) {
+  // Beds advance clockwise, i.e. as the angle decreases.
+  const raw = Math.floor((FIRST_BOUNDARY_DEG - angleDeg) / SECTOR_ARC_DEG);
+  return ((raw % 20) + 20) % 20;
+}
+
+/**
+ * Score a board-coordinate point, in millimetres.
+ *
+ * Boundaries belong to the higher-scoring region: a point exactly on the outer
+ * treble wire is a treble. It only matters for measure-zero cases, but fixing
+ * the convention keeps the function total and the tests exact.
+ *
+ * @param {number} x @param {number} y @param {BoardSpec} [board]
+ * @returns {Hit}
+ */
+function scoreAt(x, y, board = BDO_BOARD) {
+  const r = radius(x, y);
+
+  if (r > board.rDouble) return { segment: 0, multiplier: 0, score: 0, notation: 'MISS' };
+  if (r <= board.rInnerBull) return { segment: 25, multiplier: 2, score: 50, notation: 'DB' };
+  if (r <= board.rOuterBull) return { segment: 25, multiplier: 1, score: 25, notation: 'SB' };
+
+  const segment = SECTORS_CLOCKWISE_FROM_20[sectorIndex(Math.atan2(y, x) * DEG)];
+
+  let multiplier, prefix;
+  if (r > rDoubleInner(board)) {
+    [multiplier, prefix] = [2, 'D'];
+  } else if (rTrebleInner(board) < r && r <= board.rTreble) {
+    [multiplier, prefix] = [3, 'T'];
+  } else {
+    [multiplier, prefix] = [1, 'S'];
+  }
+  return { segment, multiplier, score: segment * multiplier, notation: `${prefix}${segment}` };
+}
+
+/**
+ * @typedef {object} Boundary
+ * @property {'radial'|'sector'} kind
+ * @property {string} name
+ * @property {number} distanceMm
+ * @property {boolean} inside
+ */
+
+/** @param {BoardSpec} b */
+const radialBoundaries = (b) => [
+  [b.rInnerBull, 'bullseye ring'],
+  [b.rOuterBull, 'outer bull ring'],
+  [rTrebleInner(b), 'inner treble wire'],
+  [b.rTreble, 'outer treble wire'],
+  [rDoubleInner(b), 'inner double wire'],
+  [b.rDouble, 'outer double wire'],
+];
+
+/**
+ * The nearest score-changing boundary, named.
+ *
+ * Sector wires are ignored inside the outer bull, where the bed number does
+ * not affect the score.
+ *
+ * @param {number} x @param {number} y @param {BoardSpec} [board]
+ * @returns {Boundary}
+ */
+function nearestBoundary(x, y, board = BDO_BOARD) {
+  const r = radius(x, y);
+
+  let best = null;
+  for (const [radius, label] of radialBoundaries(board)) {
+    const distance = Math.abs(r - Number(radius));
+    if (best === null || distance < best.distanceMm) {
+      best = { kind: 'radial', name: String(label), distanceMm: distance, inside: r < radius };
+    }
+  }
+  if (r <= board.rOuterBull) return /** @type {Boundary} */ (best);
+
+  const angle = Math.atan2(y, x) * DEG;
+  const offset = (((FIRST_BOUNDARY_DEG - angle) % SECTOR_ARC_DEG) + SECTOR_ARC_DEG) % SECTOR_ARC_DEG;
+  const angularMm = (r * Math.min(offset, SECTOR_ARC_DEG - offset)) / DEG;
+  if (angularMm >= /** @type {Boundary} */ (best).distanceMm) return /** @type {Boundary} */ (best);
+
+  const index = Math.floor((FIRST_BOUNDARY_DEG - angle) / SECTOR_ARC_DEG);
+  const wire = offset <= SECTOR_ARC_DEG / 2 ? index : index + 1;
+  const ccw = SECTORS_CLOCKWISE_FROM_20[(((wire - 1) % 20) + 20) % 20];
+  const cw = SECTORS_CLOCKWISE_FROM_20[(((wire % 20) + 20) % 20)];
+  return { kind: 'sector', name: `${ccw}|${cw} wire`, distanceMm: angularMm, inside: false };
+}
+
+/**
+ * Millimetres to the nearest boundary that changes the score.
+ *
+ * The quantity that decides whether a localization error matters at all: an
+ * error smaller than the margin cannot change the score.
+ *
+ * @param {number} x @param {number} y @param {BoardSpec} [board]
+ */
+function marginToNearestBoundary(x, y, board = BDO_BOARD) {
+  return nearestBoundary(x, y, board).distanceMm;
+}
+
+return { SECTORS_CLOCKWISE_FROM_20, BDO_BOARD, rDoubleInner, rTrebleInner, scoreAt, nearestBoundary, marginToNearestBoundary };
+})();
+
+/* ---- lib/homography.js ---- */
+const __homography = (() => {
+/**
+ * Image-to-board homography by normalized DLT.
+ *
+ * A port of `src/dartvision/geometry/calibration.py`, with one substitution.
+ * The Python takes the smallest singular vector of the 2n x 9 design matrix via
+ * NumPy's SVD; a browser has no NumPy, so this takes the smallest *eigen*vector
+ * of A-transpose-A (9 x 9, symmetric) by cyclic Jacobi rotation instead.
+ *
+ * The two are the same vector. Forming A-transpose-A squares the condition
+ * number, which is normally the reason to prefer SVD -- but the isotropic
+ * normalization step exists precisely to keep that condition number small, and
+ * parity against the Python is checked on real camera poses rather than
+ * assumed.
+ */
+
+/** @typedef {[number, number]} Point */
+
+const DEG = 180 / Math.PI;
+
+/** Sector-boundary wires 90 degrees apart, in the fixed landmark order. */
+const CALIBRATION_ANGLES_DEG = Object.freeze([9.0, 99.0, 189.0, 279.0]);
+
+/** @param {number} radius */
+const ringPoints = (radius) =>
+  CALIBRATION_ANGLES_DEG.map((a) => [
+    radius * Math.cos(a / DEG),
+    radius * Math.sin(a / DEG),
+  ]);
+
+/**
+ * Board coordinates for the standard landmark counts.
+ * Four: the outer double wire. Eight: those plus the outer treble wire.
+ * @param {number} count
+ * @param {{rDouble:number, rTreble:number}} board
+ * @returns {Point[]}
+ */
+function calibrationPoints(count, board) {
+  if (count === 4) return /** @type {Point[]} */ (ringPoints(board.rDouble));
+  if (count === 8) {
+    return /** @type {Point[]} */ ([...ringPoints(board.rDouble), ...ringPoints(board.rTreble)]);
+  }
+  throw new Error(`no canonical board points for ${count} landmarks; 4 and 8 are standard`);
+}
+
+/** Indices of the landmarks actually found. Slot identifies a point, not position. */
+function visibleLandmarks(points) {
+  const out = [];
+  points.forEach((p, i) => { if (p) out.push(i); });
+  return out;
+}
+
+/** Isotropic normalization: centroid at origin, mean distance sqrt(2). */
+function normalize(points) {
+  const n = points.length;
+  const cx = points.reduce((s, p) => s + p[0], 0) / n;
+  const cy = points.reduce((s, p) => s + p[1], 0) / n;
+  const centred = points.map(([x, y]) => [x - cx, y - cy]);
+  const mean = centred.reduce((s, [x, y]) => s + Math.hypot(x, y), 0) / n;
+  if (mean < 1e-12) throw new Error('degenerate point set: all points coincide');
+  const s = Math.SQRT2 / mean;
+  return {
+    points: centred.map(([x, y]) => [x * s, y * s]),
+    t: [[s, 0, -s * cx], [0, s, -s * cy], [0, 0, 1]],
+  };
+}
+
+/**
+ * Eigenvector of the smallest eigenvalue of a symmetric matrix, by cyclic
+ * Jacobi rotation. Converges quadratically and needs no pivoting strategy
+ * beyond sweeping every off-diagonal, which for a 9x9 run once per frame is
+ * far below the cost of anything else on the page.
+ */
+function smallestEigenvector(matrix) {
+  const n = matrix.length;
+  const a = matrix.map((row) => row.slice());
+  let v = Array.from({ length: n }, (_, i) =>
+    Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)));
+
+  for (let sweep = 0; sweep < 60; sweep += 1) {
+    let off = 0;
+    for (let p = 0; p < n; p += 1) for (let q = p + 1; q < n; q += 1) off += a[p][q] ** 2;
+    if (off < 1e-24) break;
+
+    for (let p = 0; p < n; p += 1) {
+      for (let q = p + 1; q < n; q += 1) {
+        if (Math.abs(a[p][q]) < 1e-18) continue;
+        const theta = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+        const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+        const c = 1 / Math.sqrt(t * t + 1);
+        const s = t * c;
+        for (let k = 0; k < n; k += 1) {
+          const akp = a[k][p], akq = a[k][q];
+          a[k][p] = c * akp - s * akq;
+          a[k][q] = s * akp + c * akq;
+        }
+        for (let k = 0; k < n; k += 1) {
+          const apk = a[p][k], aqk = a[q][k];
+          a[p][k] = c * apk - s * aqk;
+          a[q][k] = s * apk + c * aqk;
+          const vkp = v[k][p], vkq = v[k][q];
+          v[k][p] = c * vkp - s * vkq;
+          v[k][q] = s * vkp + c * vkq;
+        }
+      }
+    }
+  }
+
+  let best = 0;
+  for (let i = 1; i < n; i += 1) if (a[i][i] < a[best][best]) best = i;
+  return v.map((row) => row[best]);
+}
+
+/** @param {number[][]} a @param {number[][]} b */
+function matMul(a, b) {
+  return a.map((row, i) =>
+    b[0].map((_, j) => row.reduce((s, _v, k) => s + a[i][k] * b[k][j], 0)));
+}
+
+/** @param {number[][]} m */
+function matInv3(m) {
+  const [[a, b, c], [d, e, f], [g, h, i]] = m;
+  const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+  if (Math.abs(det) < 1e-18) throw new Error('singular matrix');
+  return [
+    [(e * i - f * h) / det, (c * h - b * i) / det, (b * f - c * e) / det],
+    [(f * g - d * i) / det, (a * i - c * g) / det, (c * d - a * f) / det],
+    [(d * h - e * g) / det, (b * g - a * h) / det, (a * e - b * d) / det],
+  ];
+}
+
+/** Apply a 3x3 projective map to a point. @param {number[][]} m */
+function apply(m, [x, y]) {
+  const w = m[2][0] * x + m[2][1] * y + m[2][2];
+  if (Math.abs(w) < 1e-12) throw new Error('point maps to the line at infinity');
+  return [
+    (m[0][0] * x + m[0][1] * y + m[0][2]) / w,
+    (m[1][0] * x + m[1][1] * y + m[1][2]) / w,
+  ];
+}
+
+/**
+ * Estimate the image-to-board homography.
+ *
+ * `imagePoints` are in the fixed landmark order and may contain `null` for
+ * landmarks not found; those are dropped together with their board partners,
+ * so a partial set still works as long as four survive. Pairing is by slot --
+ * compacting the image points alone would match landmark 3 to landmark 2's
+ * board coordinate and produce a plausible, wrong homography.
+ *
+ * @param {(Point|null)[]} imagePoints
+ * @param {{rDouble:number, rTreble:number}} board
+ * @param {Point[]} [boardPoints] one entry per slot, including missing ones
+ * @returns {number[][]} 3x3, image -> board millimetres
+ */
+function estimateHomography(imagePoints, board, boardPoints) {
+  const kept = visibleLandmarks(imagePoints);
+  if (kept.length < 4) {
+    throw new Error(`a homography needs at least 4 correspondences, got ${kept.length}`);
+  }
+  const dst = boardPoints ?? calibrationPoints(imagePoints.length, board);
+  if (dst.length !== imagePoints.length) {
+    throw new Error(`got ${imagePoints.length} image points but ${dst.length} board points`);
+  }
+
+  const src = normalize(kept.map((i) => imagePoints[i]));
+  const target = normalize(kept.map((i) => dst[i]));
+
+  const rows = [];
+  src.points.forEach(([x, y], i) => {
+    const [u, v] = target.points[i];
+    rows.push([-x, -y, -1, 0, 0, 0, u * x, u * y, u]);
+    rows.push([0, 0, 0, -x, -y, -1, v * x, v * y, v]);
+  });
+
+  const ata = Array.from({ length: 9 }, (_, i) =>
+    Array.from({ length: 9 }, (_, j) => rows.reduce((s, r) => s + r[i] * r[j], 0)));
+  const h = smallestEigenvector(ata);
+  const hn = [h.slice(0, 3), h.slice(3, 6), h.slice(6, 9)];
+
+  const m = matMul(matMul(matInv3(target.t), hn), src.t);
+  if (Math.abs(m[2][2]) < 1e-12) throw new Error('degenerate landmark configuration');
+  return m.map((row) => row.map((value) => value / m[2][2]));
+}
+
+/**
+ * Whether the first four visible landmarks form a convex quadrilateral in
+ * order. Any four points in general position admit an exact homography, so a
+ * detector reporting four points along one wire produces confident nonsense
+ * that nothing downstream would complain about. This is where it gets caught.
+ *
+ * @param {(Point|null)[]} imagePoints
+ */
+function convexAndOrdered(imagePoints) {
+  const quad = visibleLandmarks(imagePoints).slice(0, 4).map((i) => imagePoints[i]);
+  if (quad.length < 4) return false;
+
+  let sign = 0;
+  for (let i = 0; i < 4; i += 1) {
+    const [ax, ay] = quad[i];
+    const [bx, by] = quad[(i + 1) % 4];
+    const [cx, cy] = quad[(i + 2) % 4];
+    const cross = (bx - ax) * (cy - by) - (by - ay) * (cx - bx);
+    if (Math.abs(cross) < 1e-12) return false;
+    const current = Math.sign(cross);
+    if (sign === 0) sign = current;
+    else if (current !== sign) return false;
+  }
+  return true;
+}
+
+return { CALIBRATION_ANGLES_DEG, calibrationPoints, visibleLandmarks, matMul, matInv3, apply, estimateHomography, convexAndOrdered };
+})();
+
+/* ---- lib/framing.js ---- */
+const __framing = (() => {
+/**
+ * Setup-time framing guidance.
+ *
+ * A port of `src/dartvision/calibrate/framing.py`. The screen never asks the
+ * player for an angle -- it measures one, from nothing but the eight
+ * landmarks.
+ *
+ * A plane seen face-on scales equally in every direction; tilted by `el` out of
+ * the image plane, it compresses along the tilt by sin(el). So the two singular
+ * values of the homography's local Jacobian at the bull stand in ratio
+ * 1/sin(el), and asin recovers the angle -- with no focal length, sensor size
+ * or distance, none of which a browser can be trusted to report.
+ */
+
+const { BDO_BOARD } = __board;
+const { apply, convexAndOrdered, estimateHomography, matInv3, visibleLandmarks } = __homography;
+const DEG = 180 / Math.PI;
+
+const READY = 'ready';
+const MARGINAL = 'marginal';
+const UNUSABLE = 'unusable';
+
+/**
+ * Where the bands come from, so they can be argued with rather than guessed.
+ *
+ * `minElevationDeg` is the floor from #2: below it, the 4 mm gate needs
+ * sub-pixel precision the representation cannot deliver. `maxElevationDeg` is
+ * not about accuracy at all -- face-on is the best view measured. It is where
+ * the darts are.
+ *
+ * `minRingPx` is the precision budget from #15, measured at the model's input
+ * size and through the player's actual perspective. A board tilted out of the
+ * image plane has narrower rings than the face-on arithmetic suggests, by
+ * roughly sin(elevation), which is why the default input is 768 rather than
+ * the 640 a face-on calculation would justify.
+ */
+const DEFAULT_LIMITS = Object.freeze({
+  minElevationDeg: 30,
+  idealElevationDeg: [45, 65],
+  maxElevationDeg: 70,
+  minRingPx: 10,
+  idealRingPx: 12,
+  modelInputPx: 768,
+});
+
+/** Local board-to-image scale at a board point, in pixels per millimetre. */
+function jacobian(boardToImage, x, y, step = 0.5) {
+  const col = (dx, dy) => {
+    const ahead = apply(boardToImage, [x + dx, y + dy]);
+    const behind = apply(boardToImage, [x - dx, y - dy]);
+    return [(ahead[0] - behind[0]) / (2 * step), (ahead[1] - behind[1]) / (2 * step)];
+  };
+  const [a, c] = col(step, 0);
+  const [b, d] = col(0, step);
+  return [a, b, c, d];
+}
+
+/** Singular values of a 2x2, largest first. Exact, via the eigenvalues of MtM. */
+function singularValues([a, b, c, d]) {
+  const trace = a * a + b * b + c * c + d * d;
+  const det = (a * d - b * c) ** 2;
+  const disc = Math.sqrt(Math.max(0, trace * trace - 4 * det));
+  return [Math.sqrt((trace + disc) / 2), Math.sqrt(Math.max(0, (trace - disc) / 2))];
+}
+
+/** Angle above the board plane, from the anisotropy at the bull. */
+function elevationDeg(boardToImage) {
+  const [largest, smallest] = singularValues(jacobian(boardToImage, 0, 0));
+  if (largest <= 0) throw new Error('degenerate homography');
+  return Math.asin(Math.min(1, smallest / largest)) * DEG;
+}
+
+/**
+ * Median and worst pixels-per-mm around the double ring, plus the board's
+ * extent in pixels. Both statistics are taken in the most compressed direction
+ * at each point: one squashed axis is enough to lose a score however good the
+ * other looks. The median is what the guidance judges, since the gates are
+ * distributional over darts and darts land all round the board.
+ */
+function ringScale(boardToImage, board, samples = 180) {
+  const scales = [];
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+  for (let i = 0; i < samples; i += 1) {
+    const angle = (2 * Math.PI * i) / samples;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    scales.push(singularValues(jacobian(boardToImage, board.rDouble * cos, board.rDouble * sin))[1]);
+
+    const [px, py] = apply(boardToImage, [board.rBoard * cos, board.rBoard * sin]);
+    minX = Math.min(minX, px); maxX = Math.max(maxX, px);
+    minY = Math.min(minY, py); maxY = Math.max(maxY, py);
+  }
+
+  const sorted = [...scales].sort((p, q) => p - q);
+  const mid = sorted.length >> 1;
+  const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  return { median, worst: sorted[0], extent: Math.max(maxX - minX, maxY - minY) };
+}
+
+/**
+ * Judge one frame's framing and say what to do about it.
+ *
+ * @param {([number,number]|null)[]} landmarks normalized image coordinates, fixed order
+ * @param {{height:number, width:number}} imageSize pixels
+ * @param {object} [limits]
+ * @param {object} [board]
+ */
+function assessFraming(landmarks, imageSize, limits = DEFAULT_LIMITS, board = BDO_BOARD) {
+  const found = visibleLandmarks(landmarks).length;
+  const refuse = (guidance) => ({
+    verdict: UNUSABLE, guidance, landmarksFound: found, ready: false,
+    elevationDeg: null, boardFill: null, ringPx: null, ringPxWorst: null, mmPerPxWorst: null,
+  });
+
+  if (found < 4) {
+    return refuse(found === 0
+      ? 'Point the phone at the board — not enough of it is visible yet.'
+      : 'Part of the board is out of frame or hidden. Show the whole board.');
+  }
+
+  const pixels = landmarks.map((p) =>
+    p ? [p[0] * imageSize.width, p[1] * imageSize.height] : null);
+
+  if (!convexAndOrdered(pixels)) {
+    return refuse('The board’s outline does not look right. Reposition and try again.');
+  }
+
+  let boardToImage, elevation, scale;
+  try {
+    boardToImage = matInv3(estimateHomography(pixels, board));
+    elevation = elevationDeg(boardToImage);
+    scale = ringScale(boardToImage, board);
+  } catch {
+    return refuse('The board’s outline does not look right. Reposition and try again.');
+  }
+
+  const shorter = Math.min(imageSize.height, imageSize.width);
+  // What the model will actually see: the frame is resized to its input, and
+  // that resize is where the resolution is lost.
+  const resize = limits.modelInputPx / shorter;
+  const ringPx = board.ringWidth * scale.median * resize;
+
+  const { verdict, guidance } = judge(elevation, ringPx, limits);
+  return {
+    verdict, guidance, ready: verdict === READY, landmarksFound: found,
+    elevationDeg: elevation,
+    boardFill: scale.extent / shorter,
+    ringPx,
+    ringPxWorst: board.ringWidth * scale.worst * resize,
+    mmPerPxWorst: 1 / scale.worst,
+  };
+}
+
+/** One verdict and the single most useful next action. */
+function judge(elevation, ringPx, limits) {
+  const [low, high] = limits.idealElevationDeg;
+
+  // Being in the flight path outranks everything: that one costs a phone
+  // rather than a score.
+  if (elevation > limits.maxElevationDeg) {
+    return { verdict: UNUSABLE, guidance:
+      'The phone is nearly in line with the board — that is where the darts fly. '
+      + 'Move it further to one side, or higher up.' };
+  }
+  if (elevation < limits.minElevationDeg) {
+    return { verdict: UNUSABLE, guidance:
+      'The view is too side-on to score accurately. Move the phone around toward '
+      + 'the front of the board.' };
+  }
+
+  if (ringPx < limits.minRingPx) {
+    // Two causes look identical in this number. An oblique view compresses the
+    // rings by roughly sin(elevation), so a player already filling the frame at
+    // 35 degrees cannot fix it by moving closer -- and telling them to is the
+    // most annoying advice available.
+    if (elevation < low) {
+      return { verdict: UNUSABLE, guidance:
+        'Too side-on for this distance — the scoring rings are squashed. Move the '
+        + 'phone around toward the front of the board.' };
+    }
+    return { verdict: UNUSABLE, guidance:
+      'The board is too small in the frame. Move the phone closer until the board '
+      + 'nearly fills it.' };
+  }
+
+  if (elevation < low) {
+    return { verdict: MARGINAL, guidance:
+      'Good enough to score. A little more toward the front of the board would be better.' };
+  }
+  if (ringPx < limits.idealRingPx) {
+    return { verdict: MARGINAL, guidance:
+      'This will work, but scores near the wires will be less certain. Move a little '
+      + 'closer if you can.' };
+  }
+  if (elevation > high) {
+    return { verdict: MARGINAL, guidance:
+      'Good enough to score, but close to the throwing line. Further to the side would '
+      + 'be safer for the phone.' };
+  }
+  return { verdict: READY, guidance: 'Ready to throw.' };
+}
+
+return { READY, MARGINAL, UNUSABLE, DEFAULT_LIMITS, assessFraming };
+})();
+
+/* ---- lib/match.js ---- */
+const __match = (() => {
+/**
+ * The match loop: what the screen says, and what a tap does.
+ *
+ * A port of `src/dartvision/match/session.py`. Two decisions carry it.
+ *
+ * **Confirmations wait for the retrieval pause.** Three darts take about ten
+ * seconds, so a prompt when an uncertain dart lands arrives while the player is
+ * already mid-throw. Instead the dart scores provisionally on landing -- which
+ * holds the 300 ms impact-to-score budget -- and the question is asked when the
+ * visit ends, during the ten to fifteen seconds of pulling darts out. Two taps
+ * a leg then cost nothing, because they are spent in time the game was wasting.
+ *
+ * **Correcting is not a state.** A modal correction screen blocks the next
+ * throw to fix the last one. It is an action, available any time, emitting a
+ * new event that supersedes rather than mutates.
+ *
+ * Knows nothing about rules. No bust, no checkout, no turn order -- that is the
+ * game engine's, and the separation is what lets scoring be tested without a
+ * rulebook.
+ */
+
+const { BDO_BOARD, nearestBoundary, scoreAt } = __board;
+const DARTS_PER_VISIT = 3;
+
+const NOT_CALIBRATED = 'not_calibrated';
+const READY = 'ready';
+const SCORING = 'scoring';
+const CONFIRMING = 'confirming';
+const AWAITING_REMOVAL = 'awaiting_removal';
+
+const CAMERA = 'camera';
+const MANUAL = 'manual';
+const CORRECTION = 'correction';
+
+/**
+ * Which throws get asked about.
+ *
+ * Confidence answers "how sure am I where the tip is". It does not answer
+ * "does that uncertainty change the score", and the two come apart constantly:
+ * 2 mm of error 20 mm from any wire is certain; the same 2 mm a fifth of a
+ * millimetre from the treble wire is a coin flip. So the policy reads both.
+ */
+const DEFAULT_POLICY = Object.freeze({
+  minConfidence: 0.9,
+  minMarginMm: 2.0,
+  highConfidence: 0.99,
+});
+
+/** @param {object} event @param {typeof DEFAULT_POLICY} policy */
+function shouldConfirm(event, policy = DEFAULT_POLICY) {
+  const { confidence, marginMm } = event.detected;
+  if (confidence < policy.minConfidence) return true;
+  // Near a boundary, only a very confident call stands on its own.
+  if (marginMm < policy.minMarginMm) return confidence < policy.highConfidence;
+  return false;
+}
+
+let counter = 0;
+const nextId = () => `t${(counter += 1)}`;
+
+class MatchSession {
+  /** @param {{policy?: object, board?: object, newId?: () => string}} [options] */
+  constructor(options = {}) {
+    this.policy = options.policy ?? DEFAULT_POLICY;
+    this.board = options.board ?? BDO_BOARD;
+    this.newId = options.newId ?? nextId;
+
+    this.calibration = null;
+    this.visit = [];
+    this.history = [];
+    this.unconfirmed = [];
+    this.dartsInBoard = false;
+    this.visitClosed = false;
+  }
+
+  setCalibration(status) {
+    // Losing calibration does not discard the visit. Those darts were scored
+    // under a calibration that was valid when they landed; throwing them away
+    // would be a worse failure than the one being reported.
+    this.calibration = status;
+    return this.prompt();
+  }
+
+  /** Build an event from a board coordinate, scoring it deterministically. */
+  event(x, y, confidence, source, extra = {}) {
+    const hit = scoreAt(x, y, this.board);
+    const boundary = nearestBoundary(x, y, this.board);
+    return {
+      id: this.newId(),
+      capturedAt: new Date().toISOString(),
+      source,
+      boardXMm: x,
+      boardYMm: y,
+      detected: {
+        segment: hit.segment,
+        multiplier: hit.multiplier,
+        score: hit.score,
+        notation: hit.notation,
+        confidence,
+        marginMm: boundary.distanceMm,
+        boundary: boundary.name,
+      },
+      ...extra,
+    };
+  }
+
+  recordThrow(x, y, confidence) {
+    if (!this.calibration?.scoringPossible) {
+      throw new Error('no valid calibration; a throw cannot be scored and must not be invented');
+    }
+    if (this.visit.length >= DARTS_PER_VISIT) {
+      throw new Error(`a visit holds at most ${DARTS_PER_VISIT} darts`);
+    }
+    const event = this.event(x, y, confidence, CAMERA, { sequence: this.visit.length + 1 });
+    this.visit.push(event);
+    this.history.push(event);
+    if (shouldConfirm(event, this.policy)) this.unconfirmed.push(event.id);
+    this.dartsInBoard = true;
+    if (this.visit.length === DARTS_PER_VISIT) this.visitClosed = true;
+    return event;
+  }
+
+  /**
+   * A dart that left the board and was never detected.
+   *
+   * Placed at a coordinate that genuinely is off the board rather than at the
+   * origin, so anything re-deriving the score from the position still reads
+   * MISS instead of a double bull. Never queued: the player entered it.
+   */
+  recordMiss() {
+    const event = this.event(0, this.board.rBoard + 10, 1, MANUAL,
+      { sequence: this.visit.length + 1 });
+    this.visit.push(event);
+    this.history.push(event);
+    if (this.visit.length === DARTS_PER_VISIT) this.visitClosed = true;
+    return event;
+  }
+
+  /** The darts came out. Ends the visit however many were thrown. */
+  boardCleared() {
+    this.dartsInBoard = false;
+    this.visitClosed = true;
+    // Queued questions survive this: they are about the score, not about what
+    // is still stuck in the board.
+    if (!this.unconfirmed.length) this.startVisit();
+    return this.prompt();
+  }
+
+  confirm(throwId) {
+    this.resolve(throwId);
+    return this.prompt();
+  }
+
+  /** Replace a throw's score without rewriting what was recorded. */
+  correct(throwId, x, y) {
+    const original = this.find(throwId);
+    if (!original) throw new Error(`no throw ${throwId}`);
+
+    const replacement = this.event(x, y, 1, CORRECTION, {
+      corrects: original.id,
+      sequence: original.sequence,
+    });
+    this.history.push(replacement);
+    this.visit = this.visit.map((t) => (t.id === original.id ? replacement : t));
+    this.resolve(throwId);
+    return replacement;
+  }
+
+  resolve(throwId) {
+    this.unconfirmed = this.unconfirmed.filter((id) => id !== throwId);
+    if (this.visitClosed && !this.unconfirmed.length && !this.dartsInBoard) this.startVisit();
+  }
+
+  startVisit() {
+    this.visit = [];
+    this.visitClosed = false;
+  }
+
+  find(throwId) {
+    return this.history.find((t) => t.id === throwId) ?? null;
+  }
+
+  get pending() {
+    return this.visit.filter((t) => this.unconfirmed.includes(t.id));
+  }
+
+  get visitScore() {
+    return this.visit.reduce((total, t) => total + t.detected.score, 0);
+  }
+
+  /** History with corrections applied -- what a game engine would score. */
+  effectiveHistory() {
+    const superseded = new Set(this.history.filter((t) => t.corrects).map((t) => t.corrects));
+    return this.history.filter((t) => !superseded.has(t.id));
+  }
+
+  /** Derived, never stored. Storing it drifts the moment two inputs interact. */
+  get state() {
+    if (!this.calibration?.scoringPossible) return NOT_CALIBRATED;
+    if (this.visitClosed && this.unconfirmed.length) return CONFIRMING;
+    if (this.visitClosed && this.dartsInBoard) return AWAITING_REMOVAL;
+    if (this.visit.length) return SCORING;
+    return READY;
+  }
+
+  /** The single thing the screen should say, and what can be tapped. */
+  prompt() {
+    const state = this.state;
+
+    if (state === NOT_CALIBRATED) {
+      // Never show this as a frozen or blank scoreboard -- the player cannot
+      // tell whether to keep throwing.
+      return {
+        state,
+        headline: 'Board not visible',
+        detail: this.visit.length
+          ? 'Scoring is paused. Darts already thrown this visit are safe.'
+          : 'Point the phone at the board to start scoring.',
+        actions: ['recalibrate', 'enter_manually'],
+        throwId: null,
+      };
+    }
+
+    if (state === CONFIRMING) {
+      const throwEvent = this.pending[0];
+      const { notation, marginMm, boundary } = throwEvent.detected;
+      return {
+        state,
+        headline: `Was that ${notation}?`,
+        detail: boundary ? `${marginMm.toFixed(1)} mm from the ${boundary}` : 'Close to a boundary.',
+        actions: ['confirm', 'correct'],
+        throwId: throwEvent.id,
+      };
+    }
+
+    if (state === AWAITING_REMOVAL) {
+      return {
+        state,
+        headline: `${this.visitScore}`,
+        detail: 'Collect your darts.',
+        actions: ['correct', 'undo_visit'],
+        throwId: null,
+      };
+    }
+
+    if (state === SCORING) {
+      const last = this.visit[this.visit.length - 1];
+      return {
+        state,
+        headline: last.detected.notation,
+        detail: `${this.visitScore} so far · dart ${this.visit.length} of 3`,
+        actions: ['correct', 'record_miss'],
+        throwId: last.id,
+      };
+    }
+
+    return {
+      state: READY,
+      headline: 'Ready',
+      detail: 'Throw when you are.',
+      actions: ['record_miss'],
+      throwId: null,
+    };
+  }
+}
+
+return { DARTS_PER_VISIT, NOT_CALIBRATED, READY, SCORING, CONFIRMING, AWAITING_REMOVAL, CAMERA, MANUAL, CORRECTION, DEFAULT_POLICY, shouldConfirm, MatchSession };
+})();
+
+/* ---- lib/x01.js ---- */
+const __x01 = (() => {
+/**
+ * X01 rules: 501, 301, double-out.
+ *
+ * A port of `src/dartvision/game/x01.py`, checked against it by
+ * `web/test/parity.test.mjs`. Knows nothing about cameras: vision says *this
+ * dart is a treble 20*, this says whether that won the leg.
+ *
+ * **The engine is a fold, not a mutable scoreboard.** `replay` is the whole
+ * rule set for a leg and `play` folds a match out of visits. That shape is
+ * what makes corrections work: a correction never mutates history, so applying
+ * one means folding the corrected sequence again. A mutable scoreboard would
+ * have to *undo* a dart, and undoing a bust correctly -- restoring the
+ * pre-visit total, un-ending the turn, un-switching the player -- is the kind
+ * of thing that is wrong for a year before anyone notices.
+ */
+
+const DARTS_PER_VISIT = 3;
+
+const SCORED = 'scored';
+const BUST = 'bust';
+const WON = 'won';
+const IGNORED = 'ignored';
+
+/** @typedef {{start:number, doubleOut:boolean, doubleIn:boolean}} X01Rules */
+
+/** @returns {X01Rules} */
+function rules({ start = 501, doubleOut = true, doubleIn = false } = {}) {
+  if (start < 2) throw new Error('start must be at least 2');
+  if (doubleOut && start % 2 && start < 4) {
+    throw new Error('an odd start below 4 cannot be finished on a double');
+  }
+  return { start, doubleOut, doubleIn };
+}
+
+/** @typedef {{segment:number, multiplier:number}} Dart */
+
+/** A dart, validated. Not a ThrowEvent: the rules must work on paper. */
+function dart(segment, multiplier) {
+  if (![0, 1, 2, 3].includes(multiplier)) throw new Error('multiplier must be 0, 1, 2 or 3');
+  if (multiplier === 0 && segment !== 0) throw new Error('a miss has segment 0');
+  if (segment === 25 && multiplier === 3) throw new Error('there is no treble bull');
+  if (segment !== 0 && segment !== 25 && !(segment >= 1 && segment <= 20)) {
+    throw new Error(`no such segment: ${segment}`);
+  }
+  return { segment, multiplier };
+}
+
+const score = (d) => d.segment * d.multiplier;
+/** The double bull counts as a double, which is why 50 finishes a leg. */
+const isDouble = (d) => d.multiplier === 2;
+
+function notation(d) {
+  if (d.multiplier === 0) return 'MISS';
+  if (d.segment === 25) return d.multiplier === 2 ? 'DB' : 'SB';
+  return `${'SDT'[d.multiplier - 1]}${d.segment}`;
+}
+
+/**
+ * @typedef {{dart: Dart, outcome: string, remaining: number, reason: string}} VisitResult
+ * @typedef {{rules: X01Rules, remaining: number, dartsThrown: number, visitDarts: number,
+ *   visitStartRemaining: number, opened: boolean, winner: boolean,
+ *   results: VisitResult[]}} LegState
+ */
+
+/** @param {X01Rules} r @returns {LegState} */
+const startLeg = (r) => ({
+  rules: r,
+  remaining: r.start,
+  dartsThrown: 0,
+  visitDarts: 0,
+  visitStartRemaining: r.start,
+  opened: !r.doubleIn,
+  winner: false,
+  results: [],
+});
+
+/** @param {LegState} leg */
+const visitScore = (leg) => leg.visitStartRemaining - leg.remaining;
+/** @param {LegState} leg */
+const threeDartAverage = (leg) =>
+  (leg.dartsThrown ? ((leg.rules.start - leg.remaining) / leg.dartsThrown) * DARTS_PER_VISIT : 0);
+
+/**
+ * Fold one dart into a leg. The entire rule set lives here.
+ * @param {LegState} leg @param {Dart} d @returns {LegState}
+ */
+function applyDart(leg, d) {
+  const record = (outcome, remaining, reason = '') => ({
+    ...leg,
+    remaining,
+    dartsThrown: leg.dartsThrown + 1,
+    visitDarts: leg.visitDarts + 1,
+    results: [...leg.results, { dart: d, outcome, remaining, reason }],
+  });
+
+  if (leg.winner) {
+    return {
+      ...leg,
+      results: [...leg.results,
+        { dart: d, outcome: IGNORED, remaining: leg.remaining, reason: 'the leg is already won' }],
+    };
+  }
+
+  if (!leg.opened) {
+    // Double-in: nothing counts until a double lands.
+    if (!isDouble(d)) return record(IGNORED, leg.remaining, 'not opened yet');
+    return { ...record(SCORED, leg.remaining - score(d)), opened: true };
+  }
+
+  const remaining = leg.remaining - score(d);
+  if (remaining === 0 && (isDouble(d) || !leg.rules.doubleOut)) {
+    return { ...record(WON, 0), winner: true };
+  }
+
+  // Three ways to bust, and they are one rule: the leg must stay finishable.
+  let reason = null;
+  if (remaining < 0) reason = 'went below zero';
+  else if (remaining === 0) reason = 'finished on a single';
+  else if (remaining === 1 && leg.rules.doubleOut) reason = 'left 1, which no double can finish';
+
+  if (reason) {
+    // A bust voids the whole visit, not just the offending dart.
+    return { ...record(BUST, leg.visitStartRemaining, reason), visitDarts: DARTS_PER_VISIT };
+  }
+  return record(SCORED, remaining);
+}
+
+const endVisit = (leg) => ({ ...leg, visitDarts: 0, visitStartRemaining: leg.remaining });
+
+/** Fold a sequence of darts into a leg. A correction is this, called again. */
+/** @param {Dart[]} darts @param {X01Rules} [r] @returns {LegState} */
+function replay(darts, r = rules()) {
+  let leg = startLeg(r);
+  for (const d of darts) {
+    if (!leg.winner && leg.visitDarts >= DARTS_PER_VISIT) leg = endVisit(leg);
+    leg = applyDart(leg, d);
+  }
+  return leg;
+}
+
+/**
+ * Fold a match from its visits.
+ *
+ * A **visit** is one player's darts before they collect them -- one to three,
+ * fewer when they check out or stand down. Taking visits rather than a flat
+ * list removes the one ambiguity a flat list has: a player who throws two and
+ * walks up is indistinguishable from one mid-visit. The match session knows
+ * where that boundary is, because the board clearing is what tells it.
+ *
+ * @param {Dart[][]} visits
+ * @param {{rules?: X01Rules, players?: string[], legsToWin?: number}} [options]
+ */
+function play(visits, { rules: r = rules(), players = ['Player 1', 'Player 2'], legsToWin = 1 } = {}) {
+  const names = [...players];
+  if (names.length < 1) throw new Error('a game needs at least one player');
+  if (new Set(names).size !== names.length) throw new Error('player names must be distinct');
+  if (legsToWin < 1) throw new Error('legsToWin must be at least 1');
+
+  let legs = names.map(() => startLeg(r));
+  const won = names.map(() => 0);
+  // Who throws first alternates leg by leg, so the advantage does not sit with
+  // one player for the whole match.
+  let legStarter = 0;
+  let toThrow = 0;
+  let legNumber = 1;
+
+  for (const visit of visits) {
+    if (won.some((count) => count >= legsToWin)) break;
+
+    const index = toThrow;
+    let leg = legs[index];
+    for (const d of visit) {
+      if (leg.visitDarts >= DARTS_PER_VISIT || leg.winner) break;
+      leg = applyDart(leg, d);
+    }
+    legs[index] = leg;
+
+    if (leg.winner) {
+      won[index] += 1;
+      legs = names.map(() => startLeg(r));
+      legNumber += 1;
+      legStarter = (legStarter + 1) % names.length;
+      toThrow = legStarter;
+      continue;
+    }
+    legs[index] = endVisit(leg);
+    toThrow = (toThrow + 1) % names.length;
+  }
+
+  return {
+    rules: r,
+    players: names,
+    legsToWin,
+    legs,
+    legsWon: won,
+    toThrow,
+    legNumber,
+    currentPlayer: names[toThrow],
+    remaining: Object.fromEntries(names.map((p, i) => [p, legs[i].remaining])),
+    wonLegs: Object.fromEntries(names.map((p, i) => [p, won[i]])),
+    winner: names.find((_, i) => won[i] >= legsToWin) ?? null,
+    legFor: (player) => legs[names.indexOf(player)],
+  };
+}
+
+return { DARTS_PER_VISIT, SCORED, BUST, WON, IGNORED, rules, dart, score, isDouble, notation, visitScore, threeDartAverage, replay, play };
+})();
 
 const $ = (id) => document.getElementById(id);
-const B = BDO_BOARD;
 const DEG = Math.PI / 180;
+const B = __board.BDO_BOARD;
 
-/* ---------------------------------------------------------------- tabs */
 for (const [tab, view, other, otherView] of [
-  ['tab-mount', 'view-mount', 'tab-match', 'view-match'],
-  ['tab-match', 'view-match', 'tab-mount', 'view-mount'],
+  ['tab-mount','view-mount','tab-match','view-match'],
+  ['tab-match','view-match','tab-mount','view-mount'],
 ]) {
   $(tab).addEventListener('click', () => {
-    $(tab).setAttribute('aria-selected', 'true');
-    $(other).setAttribute('aria-selected', 'false');
-    $(view).hidden = false;
-    $(otherView).hidden = true;
+    $(tab).setAttribute('aria-selected','true'); $(other).setAttribute('aria-selected','false');
+    $(view).hidden = false; $(otherView).hidden = true;
   });
 }
 
 /* ------------------------------------------------------- mount check */
-
-// The landmark order is fixed: four on the outer double wire at the sector
-// boundaries 90 degrees apart, then the same four on the outer treble wire.
-const WIRE_NAMES = ['6 | 13', '20 | 5', '11 | 8', '3 | 17'];
-const LANDMARKS = [
-  ...WIRE_NAMES.map((w) => ({ wire: w, ring: 'double' })),
-  ...WIRE_NAMES.map((w) => ({ wire: w, ring: 'treble' })),
-];
-
+const WIRES = ['6 | 13','20 | 5','11 | 8','3 | 17'];
+const LANDMARKS = [...WIRES.map(w=>({wire:w,ring:'double'})), ...WIRES.map(w=>({wire:w,ring:'treble'}))];
 const marks = [];
-let frame = null;           // ImageBitmap or HTMLImageElement
-let stream = null;
-
+let frame = null;
 const canvas = $('mount-canvas');
 const ctx = canvas.getContext('2d');
 
 function showTarget() {
-  const index = marks.length;
-  if (index >= 8) { $('target-card').hidden = true; return; }
+  if (marks.length >= 8 || !frame) { $('target-card').hidden = true; return; }
   $('target-card').hidden = false;
-
-  const { wire, ring } = LANDMARKS[index];
-  $('target-name').textContent = `${index + 1} of 8 — the ${wire} wire`;
+  const { wire, ring } = LANDMARKS[marks.length];
+  $('target-name').textContent = `${marks.length + 1} of 8 — the ${wire} wire`;
   $('target-detail').textContent = ring === 'double'
     ? 'where it meets the OUTER edge of the double ring (the board’s rim)'
     : 'where it meets the OUTER edge of the treble ring';
-
-  const radius = ring === 'double' ? B.rDouble : B.rTreble;
-  const angle = CALIBRATION_ANGLES_DEG[index % 4] * DEG;
-  const x = radius * Math.cos(angle), y = -radius * Math.sin(angle);
+  const r = ring === 'double' ? B.rDouble : B.rTreble;
+  const a = __homography.CALIBRATION_ANGLES_DEG[marks.length % 4] * DEG;
   $('target-map').innerHTML = `
-    <circle cx="0" cy="0" r="${B.rDouble}" fill="none" stroke="currentColor"
-            stroke-opacity=".35" stroke-width="3"/>
-    <circle cx="0" cy="0" r="${B.rTreble}" fill="none" stroke="currentColor"
-            stroke-opacity=".35" stroke-width="3"/>
-    ${CALIBRATION_ANGLES_DEG.map((a) => `<line x1="0" y1="0"
-        x2="${B.rDouble * Math.cos(a * DEG)}" y2="${-B.rDouble * Math.sin(a * DEG)}"
-        stroke="currentColor" stroke-opacity=".2" stroke-width="2"/>`).join('')}
-    <circle cx="${x}" cy="${y}" r="16" fill="var(--tip)"/>`;
+    <circle r="${B.rDouble}" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="4"/>
+    <circle r="${B.rTreble}" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="4"/>
+    ${__homography.CALIBRATION_ANGLES_DEG.map(d=>`<line x1="0" y1="0" x2="${B.rDouble*Math.cos(d*DEG)}"
+       y2="${-B.rDouble*Math.sin(d*DEG)}" stroke="currentColor" stroke-opacity=".2" stroke-width="3"/>`).join('')}
+    <circle cx="${r*Math.cos(a)}" cy="${-r*Math.sin(a)}" r="20" fill="#dc2626"/>`;
 }
 
 function drawFrame() {
   if (!frame) return;
-  canvas.width = frame.width ?? frame.naturalWidth;
-  canvas.height = frame.height ?? frame.naturalHeight;
-  ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-
-  marks.forEach((m, i) => {
-    const x = m[0] * canvas.width, y = m[1] * canvas.height;
-    const r = Math.max(canvas.width, canvas.height) / 110;
-    ctx.strokeStyle = '#dc2626'; ctx.lineWidth = r / 3;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x - r * 2, y); ctx.lineTo(x + r * 2, y);
-    ctx.moveTo(x, y - r * 2); ctx.lineTo(x, y + r * 2); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = r / 4;
-    ctx.font = `700 ${r * 2.4}px system-ui`;
-    ctx.strokeText(String(i + 1), x + r * 1.6, y - r * 1.4);
-    ctx.fillText(String(i + 1), x + r * 1.6, y - r * 1.4);
+  canvas.width = frame.width; canvas.height = frame.height;
+  ctx.drawImage(frame, 0, 0);
+  const r = Math.max(canvas.width, canvas.height) / 110;
+  marks.forEach(([nx,ny], i) => {
+    const x = nx*canvas.width, y = ny*canvas.height;
+    ctx.strokeStyle='#dc2626'; ctx.lineWidth=r/3;
+    ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-r*2,y); ctx.lineTo(x+r*2,y); ctx.moveTo(x,y-r*2); ctx.lineTo(x,y+r*2); ctx.stroke();
+    ctx.font=`700 ${r*2.4}px system-ui`; ctx.lineWidth=r/4;
+    ctx.strokeStyle='#000'; ctx.fillStyle='#fff';
+    ctx.strokeText(String(i+1), x+r*1.6, y-r*1.4); ctx.fillText(String(i+1), x+r*1.6, y-r*1.4);
   });
 }
 
 function assess() {
   if (marks.length < 4) { $('verdict-card').hidden = true; return; }
-  const landmarks = Array.from({ length: 8 }, (_, i) => marks[i] ?? null);
-  const report = assessFraming(landmarks, { height: canvas.height, width: canvas.width });
-
+  const report = __framing.assessFraming(
+    Array.from({length:8}, (_,i)=>marks[i] ?? null),
+    { height: canvas.height, width: canvas.width });
   $('verdict-card').hidden = false;
   $('verdict').className = `verdict ${report.verdict}`;
-  $('verdict-headline').textContent = {
-    ready: 'Good spot for the phone', marginal: 'Workable', unusable: 'Not usable here',
-  }[report.verdict];
+  $('verdict-headline').textContent =
+    ({ready:'Good spot for the phone', marginal:'Workable', unusable:'Not usable here'})[report.verdict];
   $('verdict-detail').textContent = report.guidance;
-  $('s-elev').textContent = report.elevationDeg === null ? '—'
-    : `${report.elevationDeg.toFixed(0)}°`;
-  $('s-ring').textContent = report.ringPx === null ? '—' : report.ringPx.toFixed(1);
-  $('s-fill').textContent = report.boardFill === null ? '—'
-    : `${(report.boardFill * 100).toFixed(0)}%`;
-  $('s-mm').textContent = report.mmPerPxWorst === null ? '—'
-    : report.mmPerPxWorst.toFixed(2);
+  $('s-elev').textContent = report.elevationDeg == null ? '—' : `${report.elevationDeg.toFixed(0)}°`;
+  $('s-ring').textContent = report.ringPx == null ? '—' : report.ringPx.toFixed(1);
+  $('s-fill').textContent = report.boardFill == null ? '—' : `${(report.boardFill*100).toFixed(0)}%`;
+  $('s-mm').textContent = report.mmPerPxWorst == null ? '—' : report.mmPerPxWorst.toFixed(2);
 }
 
-canvas.addEventListener('click', (event) => {
+canvas.addEventListener('click', (e) => {
   if (!frame || marks.length >= 8) return;
   const box = canvas.getBoundingClientRect();
-  // The canvas is object-fit: contain, so the drawn image is letterboxed
-  // inside the element and the click has to be mapped through that box.
-  const scale = Math.min(box.width / canvas.width, box.height / canvas.height);
-  const drawnW = canvas.width * scale, drawnH = canvas.height * scale;
-  const offsetX = (box.width - drawnW) / 2, offsetY = (box.height - drawnH) / 2;
-  const x = (event.clientX - box.left - offsetX) / drawnW;
-  const y = (event.clientY - box.top - offsetY) / drawnH;
-  if (x < 0 || x > 1 || y < 0 || y > 1) return;
-
-  marks.push([x, y]);
-  $('reset-marks').disabled = false;
+  const scale = Math.min(box.width/canvas.width, box.height/canvas.height);
+  const w = canvas.width*scale, h = canvas.height*scale;
+  const x = (e.clientX - box.left - (box.width-w)/2)/w;
+  const y = (e.clientY - box.top - (box.height-h)/2)/h;
+  if (x<0||x>1||y<0||y>1) return;
+  marks.push([x,y]); $('reset-marks').disabled = false;
   drawFrame(); showTarget(); assess();
 });
 
-function useFrame(bitmap) {
-  frame = bitmap;
-  marks.length = 0;
-  $('mount-hint').hidden = true;
-  canvas.hidden = false;
-  $('video').hidden = true;
-  $('camera-row').hidden = true;
-  if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+$('photo').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  frame = await createImageBitmap(file);
+  marks.length = 0; $('mount-hint').hidden = true; canvas.hidden = false;
   drawFrame(); showTarget(); assess();
-}
-
-$('photo').addEventListener('change', async (event) => {
-  const file = event.target.files?.[0];
-  if (file) useFrame(await createImageBitmap(file));
 });
-
 $('reset-marks').addEventListener('click', () => {
-  marks.length = 0;
-  $('reset-marks').disabled = true;
-  $('verdict-card').hidden = true;
+  marks.length = 0; $('reset-marks').disabled = true; $('verdict-card').hidden = true;
   drawFrame(); showTarget();
 });
 
-$('use-camera').addEventListener('click', async () => {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    $('mount-hint').textContent =
-      'Live camera needs a secure page (https or localhost). Use “Take a photo” instead — '
-      + 'it works anywhere and is the same measurement.';
-    $('mount-hint').hidden = false;
-    return;
-  }
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' } }, audio: false,
-    });
-    $('video').srcObject = stream;
-    $('video').hidden = false;
-    $('mount-hint').hidden = true;
-    canvas.hidden = true;
-    $('camera-row').hidden = false;
-  } catch (error) {
-    $('mount-hint').textContent =
-      `Camera unavailable (${error.name}). “Take a photo” works without a secure page.`;
-    $('mount-hint').hidden = false;
-  }
-});
-
-$('freeze').addEventListener('click', async () => {
-  const video = $('video');
-  if (video.videoWidth) useFrame(await createImageBitmap(video));
-});
-
-showTarget();
-
 /* -------------------------------------------------------- match loop */
+const PLAYERS = ['You','Them'], LEGS_TO_WIN = 2;
+let session, visits;
+const newSession = () => {
+  const s = new __match.MatchSession();
+  s.setCalibration({ scoringPossible: true, calibrationId: 'demo' });
+  return s;
+};
+const restart = () => { session = newSession(); visits = []; render(); };
 
-const session = new MatchSession();
-session.setCalibration({ scoringPossible: true, calibrationId: 'demo' });
-
-const boardCanvas = $('board');
-const bctx = boardCanvas.getContext('2d');
-const SIZE = boardCanvas.width;
-const SCALE = (SIZE / 2 - 8) / B.rBoard;
-
-const toPixels = (x, y) => [SIZE / 2 + x * SCALE, SIZE / 2 - y * SCALE];
-
-function wedge(radiusInner, radiusOuter, startDeg, endDeg, fill) {
-  bctx.beginPath();
-  bctx.arc(SIZE / 2, SIZE / 2, radiusOuter * SCALE, -endDeg * DEG, -startDeg * DEG);
-  bctx.arc(SIZE / 2, SIZE / 2, radiusInner * SCALE, -startDeg * DEG, -endDeg * DEG, true);
-  bctx.closePath();
-  bctx.fillStyle = fill;
-  bctx.fill();
-}
+const boardCanvas = $('board'), bctx = boardCanvas.getContext('2d');
+const SIZE = boardCanvas.width, SCALE = (SIZE/2-8)/B.rBoard;
 
 function drawBoard() {
-  bctx.clearRect(0, 0, SIZE, SIZE);
-  bctx.fillStyle = '#18181b';
-  bctx.beginPath();
-  bctx.arc(SIZE / 2, SIZE / 2, B.rBoard * SCALE, 0, 7);
-  bctx.fill();
-
-  const arc = 18;
-  const first = 99;
-  SECTORS_CLOCKWISE_FROM_20.forEach((_, index) => {
-    const end = first - index * arc;
-    const start = end - arc;
-    const dark = index % 2 === 1;
-    wedge(B.rOuterBull, B.rTreble - B.ringWidth, start, end, dark ? '#1c1917' : '#e7e0cf');
-    wedge(B.rTreble - B.ringWidth, B.rTreble, start, end, dark ? '#15803d' : '#b91c1c');
-    wedge(B.rTreble, B.rDouble - B.ringWidth, start, end, dark ? '#1c1917' : '#e7e0cf');
-    wedge(B.rDouble - B.ringWidth, B.rDouble, start, end, dark ? '#15803d' : '#b91c1c');
+  bctx.clearRect(0,0,SIZE,SIZE);
+  const disc = (r, fill) => { bctx.fillStyle=fill; bctx.beginPath(); bctx.arc(SIZE/2,SIZE/2,r*SCALE,0,7); bctx.fill(); };
+  const wedge = (i,o,from,to,fill) => {
+    bctx.beginPath();
+    bctx.arc(SIZE/2,SIZE/2,o*SCALE,-to*DEG,-from*DEG);
+    bctx.arc(SIZE/2,SIZE/2,i*SCALE,-from*DEG,-to*DEG,true);
+    bctx.closePath(); bctx.fillStyle=fill; bctx.fill();
+  };
+  disc(B.rBoard, '#18181b');
+  __board.SECTORS_CLOCKWISE_FROM_20.forEach((_, index) => {
+    const end = 99 - index*18, start = end - 18, dark = index % 2 === 1;
+    const bed = dark ? '#1c1917' : '#e7e0cf', ring = dark ? '#15803d' : '#b91c1c';
+    wedge(B.rOuterBull, B.rTreble-B.ringWidth, start, end, bed);
+    wedge(B.rTreble-B.ringWidth, B.rTreble, start, end, ring);
+    wedge(B.rTreble, B.rDouble-B.ringWidth, start, end, bed);
+    wedge(B.rDouble-B.ringWidth, B.rDouble, start, end, ring);
   });
-
-  bctx.fillStyle = '#15803d';
-  bctx.beginPath(); bctx.arc(SIZE / 2, SIZE / 2, B.rOuterBull * SCALE, 0, 7); bctx.fill();
-  bctx.fillStyle = '#b91c1c';
-  bctx.beginPath(); bctx.arc(SIZE / 2, SIZE / 2, B.rInnerBull * SCALE, 0, 7); bctx.fill();
-
-  bctx.fillStyle = '#e7e0cf';
-  bctx.font = `600 ${Math.round(22 * SCALE)}px ui-sans-serif, system-ui, sans-serif`;
-  bctx.textAlign = 'center';
-  bctx.textBaseline = 'middle';
-  const labelRadius = (B.rBoard + B.rDouble) / 2;
-  SECTORS_CLOCKWISE_FROM_20.forEach((number, index) => {
-    const angle = (90 - index * 18) * DEG;
-    bctx.fillText(String(number),
-      SIZE / 2 + labelRadius * Math.cos(angle) * SCALE,
-      SIZE / 2 - labelRadius * Math.sin(angle) * SCALE);
+  disc(B.rOuterBull,'#15803d'); disc(B.rInnerBull,'#b91c1c');
+  bctx.fillStyle='#e7e0cf'; bctx.textAlign='center'; bctx.textBaseline='middle';
+  bctx.font = `600 ${Math.round(22*SCALE)}px ui-sans-serif, system-ui, sans-serif`;
+  const lr = (B.rBoard + B.rDouble)/2;
+  __board.SECTORS_CLOCKWISE_FROM_20.forEach((n, i) => {
+    const a = (90 - i*18)*DEG;
+    bctx.fillText(String(n), SIZE/2 + lr*Math.cos(a)*SCALE, SIZE/2 - lr*Math.sin(a)*SCALE);
   });
-
-  session.visit.forEach((t) => {
-    const [px, py] = toPixels(t.boardXMm, t.boardYMm);
-    bctx.fillStyle = '#fff'; bctx.strokeStyle = '#000'; bctx.lineWidth = 2;
-    bctx.beginPath(); bctx.arc(px, py, 7, 0, 7); bctx.fill(); bctx.stroke();
+  session.visit.forEach(t => {
+    bctx.fillStyle='#fff'; bctx.strokeStyle='#000'; bctx.lineWidth=2;
+    bctx.beginPath(); bctx.arc(SIZE/2 + t.boardXMm*SCALE, SIZE/2 - t.boardYMm*SCALE, 7, 0, 7);
+    bctx.fill(); bctx.stroke();
   });
 }
 
-function renderMatch() {
+function render() {
+  const game = __x01.play(visits, { players: PLAYERS, legsToWin: LEGS_TO_WIN });
   const prompt = session.prompt();
-  $('m-headline').textContent = prompt.headline;
-  $('m-detail').textContent = prompt.detail;
-  $('m-boardlabel').textContent = prompt.state === CONFIRMING
-    ? 'Tap the board to correct this dart' : 'Tap the board to throw';
+  const confirming = prompt.state === __match.CONFIRMING;
+  const over = game.winner !== null;
 
-  $('m-throws').innerHTML = session.visit.map((t) => {
-    const unsure = session.pending.includes(t);
-    const corrected = t.source === 'correction';
-    const cls = corrected ? 'throw corrected' : unsure ? 'throw unsure' : 'throw';
-    const suffix = corrected ? ' ✎' : unsure ? ' ?' : '';
-    return `<span class="${cls}">${t.detected.notation}${suffix}</span>`;
+  let live = null;
+  if (session.visit.length) {
+    const leg = game.legFor(game.currentPlayer);
+    const inFlight = session.visit.map(t => ({ segment: t.detected.segment, multiplier: t.detected.multiplier }));
+    const l = __x01.replay([...leg.results.map(r => r.dart), ...inFlight], game.rules);
+    const last = l.results[l.results.length - 1];
+    live = { remaining: l.remaining, busted: last?.outcome === __x01.BUST, checkedOut: last?.outcome === __x01.WON };
+  }
+
+  $('banner-slot').innerHTML = over
+    ? `<div class="banner"><div class="headline">${game.winner} won the match</div><button id="restart">New match</button></div>` : '';
+  if (over) $('restart').addEventListener('click', restart);
+
+  $('leg-label').textContent = `Leg ${game.legNumber} · first to ${game.legsToWin}`;
+  $('scoreboard').innerHTML = game.players.map(p => {
+    const active = p === game.currentPlayer && !over;
+    const l = active ? live : null;
+    const remaining = l ? l.remaining : game.remaining[p];
+    let state = `${game.legFor(p).dartsThrown} darts this leg`;
+    if (l?.checkedOut) state = 'checked out';
+    else if (l?.busted) state = 'bust — score stands';
+    else if (active) state = `throwing · dart ${Math.min(session.visit.length+1,3)} of 3`;
+    return `<div class="player${active?' active':''}${l?.busted?' busted':''}">
+      <div class="who">${p}<span class="legs"> · ${game.wonLegs[p]}</span></div>
+      <b>${remaining}</b><div class="detail">${state}</div></div>`;
   }).join('');
 
-  const actions = $('m-actions');
-  actions.innerHTML = '';
-  const add = (label, primary, fn) => {
-    const button = document.createElement('button');
-    button.textContent = label;
-    if (primary) button.className = 'primary';
-    button.addEventListener('click', () => { fn(); drawBoard(); renderMatch(); });
-    actions.append(button);
-  };
+  $('m-headline').textContent = prompt.headline;
+  $('m-detail').textContent = prompt.detail;
+  $('m-boardlabel').textContent = over ? 'Match over'
+    : confirming ? 'Tap the board to correct this dart' : `Tap the board — ${game.currentPlayer} to throw`;
+  $('m-throws').innerHTML = session.visit.map(t => {
+    const unsure = session.pending.includes(t), corrected = t.source === 'correction';
+    const cls = corrected ? 'throw corrected' : unsure ? 'throw unsure' : 'throw';
+    return `<span class="${cls}">${t.detected.notation}${corrected?' ✎':unsure?' ?':''}</span>`;
+  }).join('');
 
-  if (prompt.state === CONFIRMING) {
-    add('Yes, that’s right', true, () => session.confirm(prompt.throwId));
-  } else {
-    if (session.visit.length) add('Darts collected', true, () => session.boardCleared());
-    if (prompt.actions.includes('record_miss')) {
-      add('Missed the board', false, () => {
-        try { session.recordMiss(); } catch { /* visit full */ }
-      });
-    }
+  const actions = $('m-actions'); actions.innerHTML = '';
+  const add = (label, primary, fn) => {
+    const b = document.createElement('button'); b.textContent = label;
+    if (primary) b.className = 'primary';
+    b.addEventListener('click', () => { fn(); render(); });
+    actions.append(b);
+  };
+  if (confirming) add('Yes, that’s right', true, () => session.confirm(prompt.throwId));
+  else if (!over) {
+    if (session.visit.length) add('Darts collected', true, () => {
+      visits.push(session.visit.map(t => ({ segment: t.detected.segment, multiplier: t.detected.multiplier })));
+      session.boardCleared();
+    });
+    if (prompt.actions.includes('record_miss')) add('Missed the board', false, () => {
+      try { session.recordMiss(); } catch {}
+    });
   }
   drawBoard();
 }
 
-boardCanvas.addEventListener('click', (event) => {
+boardCanvas.addEventListener('click', (e) => {
+  const game = __x01.play(visits, { players: PLAYERS, legsToWin: LEGS_TO_WIN });
+  if (game.winner) return;
   const box = boardCanvas.getBoundingClientRect();
-  const x = ((event.clientX - box.left) / box.width * SIZE - SIZE / 2) / SCALE;
-  const y = -((event.clientY - box.top) / box.height * SIZE - SIZE / 2) / SCALE;
-  if (scoreAt(x, y).notation === 'MISS' && Math.hypot(x, y) > B.rBoard) return;
-
-  const confidence = Number($('conf').value);
+  const x = ((e.clientX-box.left)/box.width*SIZE - SIZE/2)/SCALE;
+  const y = -((e.clientY-box.top)/box.height*SIZE - SIZE/2)/SCALE;
+  if (Math.hypot(x,y) > B.rBoard) return;
   const prompt = session.prompt();
   try {
-    if (prompt.state === CONFIRMING) session.correct(prompt.throwId, x, y);
-    else session.recordThrow(x, y, confidence);
-  } catch { /* visit full, or no calibration */ }
-  renderMatch();
+    if (prompt.state === __match.CONFIRMING) session.correct(prompt.throwId, x, y);
+    else session.recordThrow(x, y, Number($('conf').value));
+  } catch {}
+  render();
 });
-
 $('conf').addEventListener('input', () => { $('conf-value').textContent = $('conf').value; });
 
-drawBoard();
-renderMatch();
+restart();
+showTarget();
 </script>

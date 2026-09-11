@@ -1,0 +1,373 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dart Vision</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2318181b'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23b91c1c' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='none' stroke='%2315803d' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315803d'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#f8fafc; --panel:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+          --accent:#2563eb; --ok:#059669; --warn:#b45309; --bad:#dc2626; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f172a; --panel:#1e293b; --ink:#e2e8f0; --muted:#94a3b8; --line:#334155;
+            --accent:#60a5fa; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--ink); padding-bottom:env(safe-area-inset-bottom);
+         font:15px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif; }
+  header { display:flex; gap:8px; align-items:center; padding:10px 14px; background:var(--panel);
+           border-bottom:1px solid var(--line); position:sticky; top:0; z-index:10; }
+  header h1 { font-size:15px; margin:0; font-weight:650; letter-spacing:-.01em; }
+  .tabs { margin-left:auto; display:flex; gap:4px; }
+  .tab { border:1px solid var(--line); background:transparent; color:var(--muted); padding:6px 12px;
+         border-radius:999px; font:inherit; font-size:13px; cursor:pointer; }
+  .tab[aria-selected="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+  main { padding:14px; max-width:640px; margin:0 auto; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 10px; font-weight:600; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  button, label.file { border:1px solid var(--line); background:var(--panel); color:var(--ink);
+    padding:9px 14px; border-radius:9px; font:inherit; font-size:14px; cursor:pointer; min-height:40px; }
+  button.primary, label.file { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.45; cursor:default; }
+  label.file input { display:none; }
+  .stage { position:relative; background:#000; border-radius:12px; overflow:hidden; aspect-ratio:3/4;
+           display:flex; align-items:center; justify-content:center; }
+  .stage canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+  .stage .hint { color:#94a3b8; font-size:13px; padding:24px; text-align:center; }
+  .verdict { display:flex; gap:10px; align-items:flex-start; }
+  .dot { width:10px; height:10px; border-radius:50%; margin-top:7px; flex:none; }
+  .ready .dot { background:var(--ok); } .marginal .dot { background:var(--warn); } .unusable .dot { background:var(--bad); }
+  .headline { font-weight:650; font-size:17px; letter-spacing:-.01em; }
+  .detail { color:var(--muted); font-size:14px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(108px,1fr)); gap:10px; margin-top:12px; }
+  .stat { background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:9px 10px; }
+  .stat b { display:block; font-size:19px; font-weight:650; letter-spacing:-.02em; }
+  .stat span { color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; }
+  .target { display:flex; gap:12px; align-items:center; } .target svg { flex:none; }
+  .scoreboard { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
+  .player { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .player.active { border-color:var(--accent); box-shadow:inset 3px 0 0 var(--accent); }
+  .player.busted { border-color:var(--bad); box-shadow:inset 3px 0 0 var(--bad); }
+  .player.busted .detail { color:var(--bad); }
+  .player .who { font-size:13px; color:var(--muted); font-weight:600; }
+  .player .legs { color:var(--accent); }
+  .player b { display:block; font-size:34px; font-weight:700; letter-spacing:-.03em; line-height:1.1; }
+  .player .detail { font-size:12px; }
+  .banner { background:var(--accent); color:#fff; border-radius:10px; padding:12px 14px; display:flex;
+            gap:12px; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; }
+  .banner .headline { font-size:18px; }
+  .banner button { background:#fff; color:var(--accent); border-color:#fff; }
+  .big { font-size:30px; font-weight:700; letter-spacing:-.02em; }
+  .prompt-block { min-height:70px; }
+  .throws { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; min-height:32px; }
+  .throw { border:1px solid var(--line); border-radius:8px; padding:5px 9px; font-size:13px; background:var(--bg); }
+  .throw.unsure { border-color:var(--warn); color:var(--warn); }
+  .throw.corrected { border-color:var(--accent); color:var(--accent); }
+  .note { color:var(--muted); font-size:13px; }
+</style>
+
+<header>
+  <h1>Dart Vision</h1>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-mount" aria-selected="true">Mount</button>
+    <button class="tab" role="tab" id="tab-match" aria-selected="false">Match</button>
+  </div>
+</header>
+
+<main>
+  <section id="view-mount">
+    <div class="card">
+      <h2>Where should the phone go?</h2>
+      <p class="note" style="margin:0 0 12px">
+        Take a photo from where you plan to mount the phone, then tap the eight
+        landmarks. This measures your mounting angle from the photo alone — no
+        focal length, no distance, no protractor.
+      </p>
+      <div class="row">
+        <label class="file">Take a photo<input type="file" id="photo" accept="image/*" capture="environment"></label>
+        <button id="reset-marks" disabled>Start marks again</button>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="hint" id="mount-hint">Take a photo of your board to begin.</div>
+      <canvas id="mount-canvas" hidden></canvas>
+    </div>
+    <div class="card" id="target-card" style="margin-top:12px" hidden>
+      <div class="target">
+        <svg id="target-map" width="86" height="86" viewBox="-196 -196 392 392"></svg>
+        <div><div class="headline" id="target-name">—</div><div class="detail" id="target-detail">—</div></div>
+      </div>
+    </div>
+    <div class="card" id="verdict-card" hidden>
+      <div class="verdict" id="verdict"><div class="dot"></div>
+        <div><div class="headline" id="verdict-headline">—</div><div class="detail" id="verdict-detail">—</div></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><b id="s-elev">—</b><span>Elevation</span></div>
+        <div class="stat"><b id="s-ring">—</b><span>Ring px @768</span></div>
+        <div class="stat"><b id="s-fill">—</b><span>Board fill</span></div>
+        <div class="stat"><b id="s-mm">—</b><span>mm / px worst</span></div>
+      </div>
+      <p class="note" style="margin:12px 0 0">
+        45–65° is the band. Below ~30° the rings are too squashed to score
+        accurately; above ~70° the phone is in the flight path.
+      </p>
+    </div>
+  </section>
+
+  <section id="view-match" hidden>
+    <div id="banner-slot"></div>
+    <div class="card">
+      <h2 id="leg-label">Leg 1</h2>
+      <div class="scoreboard" id="scoreboard"></div>
+    </div>
+    <div class="card">
+      <div class="prompt-block"><div class="big" id="m-headline">Ready</div><div class="detail" id="m-detail">Throw when you are.</div></div>
+      <div class="throws" id="m-throws"></div>
+      <div class="row" id="m-actions" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
+      <h2 id="m-boardlabel">Tap the board to throw</h2>
+      <canvas id="board" width="560" height="560" style="width:100%;height:auto;touch-action:manipulation"></canvas>
+      <div class="row" style="margin-top:10px">
+        <label style="font-size:13px;color:var(--muted)">Model confidence
+          <input type="range" id="conf" min="0.5" max="1" step="0.01" value="0.97" style="vertical-align:middle">
+          <b id="conf-value" style="font-variant-numeric:tabular-nums">0.97</b>
+        </label>
+      </div>
+      <p class="note" style="margin:10px 0 0">
+        Uncertain darts still score instantly — the question waits until the visit
+        ends, which is when you would be pulling darts out anyway. Drop the
+        confidence, or throw near a wire, to see it happen.
+      </p>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+/*__LIB__*/
+
+const $ = (id) => document.getElementById(id);
+const DEG = Math.PI / 180;
+const B = __board.BDO_BOARD;
+
+for (const [tab, view, other, otherView] of [
+  ['tab-mount','view-mount','tab-match','view-match'],
+  ['tab-match','view-match','tab-mount','view-mount'],
+]) {
+  $(tab).addEventListener('click', () => {
+    $(tab).setAttribute('aria-selected','true'); $(other).setAttribute('aria-selected','false');
+    $(view).hidden = false; $(otherView).hidden = true;
+  });
+}
+
+/* ------------------------------------------------------- mount check */
+const WIRES = ['6 | 13','20 | 5','11 | 8','3 | 17'];
+const LANDMARKS = [...WIRES.map(w=>({wire:w,ring:'double'})), ...WIRES.map(w=>({wire:w,ring:'treble'}))];
+const marks = [];
+let frame = null;
+const canvas = $('mount-canvas');
+const ctx = canvas.getContext('2d');
+
+function showTarget() {
+  if (marks.length >= 8 || !frame) { $('target-card').hidden = true; return; }
+  $('target-card').hidden = false;
+  const { wire, ring } = LANDMARKS[marks.length];
+  $('target-name').textContent = `${marks.length + 1} of 8 — the ${wire} wire`;
+  $('target-detail').textContent = ring === 'double'
+    ? 'where it meets the OUTER edge of the double ring (the board’s rim)'
+    : 'where it meets the OUTER edge of the treble ring';
+  const r = ring === 'double' ? B.rDouble : B.rTreble;
+  const a = __homography.CALIBRATION_ANGLES_DEG[marks.length % 4] * DEG;
+  $('target-map').innerHTML = `
+    <circle r="${B.rDouble}" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="4"/>
+    <circle r="${B.rTreble}" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="4"/>
+    ${__homography.CALIBRATION_ANGLES_DEG.map(d=>`<line x1="0" y1="0" x2="${B.rDouble*Math.cos(d*DEG)}"
+       y2="${-B.rDouble*Math.sin(d*DEG)}" stroke="currentColor" stroke-opacity=".2" stroke-width="3"/>`).join('')}
+    <circle cx="${r*Math.cos(a)}" cy="${-r*Math.sin(a)}" r="20" fill="#dc2626"/>`;
+}
+
+function drawFrame() {
+  if (!frame) return;
+  canvas.width = frame.width; canvas.height = frame.height;
+  ctx.drawImage(frame, 0, 0);
+  const r = Math.max(canvas.width, canvas.height) / 110;
+  marks.forEach(([nx,ny], i) => {
+    const x = nx*canvas.width, y = ny*canvas.height;
+    ctx.strokeStyle='#dc2626'; ctx.lineWidth=r/3;
+    ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-r*2,y); ctx.lineTo(x+r*2,y); ctx.moveTo(x,y-r*2); ctx.lineTo(x,y+r*2); ctx.stroke();
+    ctx.font=`700 ${r*2.4}px system-ui`; ctx.lineWidth=r/4;
+    ctx.strokeStyle='#000'; ctx.fillStyle='#fff';
+    ctx.strokeText(String(i+1), x+r*1.6, y-r*1.4); ctx.fillText(String(i+1), x+r*1.6, y-r*1.4);
+  });
+}
+
+function assess() {
+  if (marks.length < 4) { $('verdict-card').hidden = true; return; }
+  const report = __framing.assessFraming(
+    Array.from({length:8}, (_,i)=>marks[i] ?? null),
+    { height: canvas.height, width: canvas.width });
+  $('verdict-card').hidden = false;
+  $('verdict').className = `verdict ${report.verdict}`;
+  $('verdict-headline').textContent =
+    ({ready:'Good spot for the phone', marginal:'Workable', unusable:'Not usable here'})[report.verdict];
+  $('verdict-detail').textContent = report.guidance;
+  $('s-elev').textContent = report.elevationDeg == null ? '—' : `${report.elevationDeg.toFixed(0)}°`;
+  $('s-ring').textContent = report.ringPx == null ? '—' : report.ringPx.toFixed(1);
+  $('s-fill').textContent = report.boardFill == null ? '—' : `${(report.boardFill*100).toFixed(0)}%`;
+  $('s-mm').textContent = report.mmPerPxWorst == null ? '—' : report.mmPerPxWorst.toFixed(2);
+}
+
+canvas.addEventListener('click', (e) => {
+  if (!frame || marks.length >= 8) return;
+  const box = canvas.getBoundingClientRect();
+  const scale = Math.min(box.width/canvas.width, box.height/canvas.height);
+  const w = canvas.width*scale, h = canvas.height*scale;
+  const x = (e.clientX - box.left - (box.width-w)/2)/w;
+  const y = (e.clientY - box.top - (box.height-h)/2)/h;
+  if (x<0||x>1||y<0||y>1) return;
+  marks.push([x,y]); $('reset-marks').disabled = false;
+  drawFrame(); showTarget(); assess();
+});
+
+$('photo').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  frame = await createImageBitmap(file);
+  marks.length = 0; $('mount-hint').hidden = true; canvas.hidden = false;
+  drawFrame(); showTarget(); assess();
+});
+$('reset-marks').addEventListener('click', () => {
+  marks.length = 0; $('reset-marks').disabled = true; $('verdict-card').hidden = true;
+  drawFrame(); showTarget();
+});
+
+/* -------------------------------------------------------- match loop */
+const PLAYERS = ['You','Them'], LEGS_TO_WIN = 2;
+let session, visits;
+const newSession = () => {
+  const s = new __match.MatchSession();
+  s.setCalibration({ scoringPossible: true, calibrationId: 'demo' });
+  return s;
+};
+const restart = () => { session = newSession(); visits = []; render(); };
+
+const boardCanvas = $('board'), bctx = boardCanvas.getContext('2d');
+const SIZE = boardCanvas.width, SCALE = (SIZE/2-8)/B.rBoard;
+
+function drawBoard() {
+  bctx.clearRect(0,0,SIZE,SIZE);
+  const disc = (r, fill) => { bctx.fillStyle=fill; bctx.beginPath(); bctx.arc(SIZE/2,SIZE/2,r*SCALE,0,7); bctx.fill(); };
+  const wedge = (i,o,from,to,fill) => {
+    bctx.beginPath();
+    bctx.arc(SIZE/2,SIZE/2,o*SCALE,-to*DEG,-from*DEG);
+    bctx.arc(SIZE/2,SIZE/2,i*SCALE,-from*DEG,-to*DEG,true);
+    bctx.closePath(); bctx.fillStyle=fill; bctx.fill();
+  };
+  disc(B.rBoard, '#18181b');
+  __board.SECTORS_CLOCKWISE_FROM_20.forEach((_, index) => {
+    const end = 99 - index*18, start = end - 18, dark = index % 2 === 1;
+    const bed = dark ? '#1c1917' : '#e7e0cf', ring = dark ? '#15803d' : '#b91c1c';
+    wedge(B.rOuterBull, B.rTreble-B.ringWidth, start, end, bed);
+    wedge(B.rTreble-B.ringWidth, B.rTreble, start, end, ring);
+    wedge(B.rTreble, B.rDouble-B.ringWidth, start, end, bed);
+    wedge(B.rDouble-B.ringWidth, B.rDouble, start, end, ring);
+  });
+  disc(B.rOuterBull,'#15803d'); disc(B.rInnerBull,'#b91c1c');
+  bctx.fillStyle='#e7e0cf'; bctx.textAlign='center'; bctx.textBaseline='middle';
+  bctx.font = `600 ${Math.round(22*SCALE)}px ui-sans-serif, system-ui, sans-serif`;
+  const lr = (B.rBoard + B.rDouble)/2;
+  __board.SECTORS_CLOCKWISE_FROM_20.forEach((n, i) => {
+    const a = (90 - i*18)*DEG;
+    bctx.fillText(String(n), SIZE/2 + lr*Math.cos(a)*SCALE, SIZE/2 - lr*Math.sin(a)*SCALE);
+  });
+  session.visit.forEach(t => {
+    bctx.fillStyle='#fff'; bctx.strokeStyle='#000'; bctx.lineWidth=2;
+    bctx.beginPath(); bctx.arc(SIZE/2 + t.boardXMm*SCALE, SIZE/2 - t.boardYMm*SCALE, 7, 0, 7);
+    bctx.fill(); bctx.stroke();
+  });
+}
+
+function render() {
+  const game = __x01.play(visits, { players: PLAYERS, legsToWin: LEGS_TO_WIN });
+  const prompt = session.prompt();
+  const confirming = prompt.state === __match.CONFIRMING;
+  const over = game.winner !== null;
+
+  let live = null;
+  if (session.visit.length) {
+    const leg = game.legFor(game.currentPlayer);
+    const inFlight = session.visit.map(t => ({ segment: t.detected.segment, multiplier: t.detected.multiplier }));
+    const l = __x01.replay([...leg.results.map(r => r.dart), ...inFlight], game.rules);
+    const last = l.results[l.results.length - 1];
+    live = { remaining: l.remaining, busted: last?.outcome === __x01.BUST, checkedOut: last?.outcome === __x01.WON };
+  }
+
+  $('banner-slot').innerHTML = over
+    ? `<div class="banner"><div class="headline">${game.winner} won the match</div><button id="restart">New match</button></div>` : '';
+  if (over) $('restart').addEventListener('click', restart);
+
+  $('leg-label').textContent = `Leg ${game.legNumber} · first to ${game.legsToWin}`;
+  $('scoreboard').innerHTML = game.players.map(p => {
+    const active = p === game.currentPlayer && !over;
+    const l = active ? live : null;
+    const remaining = l ? l.remaining : game.remaining[p];
+    let state = `${game.legFor(p).dartsThrown} darts this leg`;
+    if (l?.checkedOut) state = 'checked out';
+    else if (l?.busted) state = 'bust — score stands';
+    else if (active) state = `throwing · dart ${Math.min(session.visit.length+1,3)} of 3`;
+    return `<div class="player${active?' active':''}${l?.busted?' busted':''}">
+      <div class="who">${p}<span class="legs"> · ${game.wonLegs[p]}</span></div>
+      <b>${remaining}</b><div class="detail">${state}</div></div>`;
+  }).join('');
+
+  $('m-headline').textContent = prompt.headline;
+  $('m-detail').textContent = prompt.detail;
+  $('m-boardlabel').textContent = over ? 'Match over'
+    : confirming ? 'Tap the board to correct this dart' : `Tap the board — ${game.currentPlayer} to throw`;
+  $('m-throws').innerHTML = session.visit.map(t => {
+    const unsure = session.pending.includes(t), corrected = t.source === 'correction';
+    const cls = corrected ? 'throw corrected' : unsure ? 'throw unsure' : 'throw';
+    return `<span class="${cls}">${t.detected.notation}${corrected?' ✎':unsure?' ?':''}</span>`;
+  }).join('');
+
+  const actions = $('m-actions'); actions.innerHTML = '';
+  const add = (label, primary, fn) => {
+    const b = document.createElement('button'); b.textContent = label;
+    if (primary) b.className = 'primary';
+    b.addEventListener('click', () => { fn(); render(); });
+    actions.append(b);
+  };
+  if (confirming) add('Yes, that’s right', true, () => session.confirm(prompt.throwId));
+  else if (!over) {
+    if (session.visit.length) add('Darts collected', true, () => {
+      visits.push(session.visit.map(t => ({ segment: t.detected.segment, multiplier: t.detected.multiplier })));
+      session.boardCleared();
+    });
+    if (prompt.actions.includes('record_miss')) add('Missed the board', false, () => {
+      try { session.recordMiss(); } catch {}
+    });
+  }
+  drawBoard();
+}
+
+boardCanvas.addEventListener('click', (e) => {
+  const game = __x01.play(visits, { players: PLAYERS, legsToWin: LEGS_TO_WIN });
+  if (game.winner) return;
+  const box = boardCanvas.getBoundingClientRect();
+  const x = ((e.clientX-box.left)/box.width*SIZE - SIZE/2)/SCALE;
+  const y = -((e.clientY-box.top)/box.height*SIZE - SIZE/2)/SCALE;
+  if (Math.hypot(x,y) > B.rBoard) return;
+  const prompt = session.prompt();
+  try {
+    if (prompt.state === __match.CONFIRMING) session.correct(prompt.throwId, x, y);
+    else session.recordThrow(x, y, Number($('conf').value));
+  } catch {}
+  render();
+});
+$('conf').addEventListener('input', () => { $('conf-value').textContent = $('conf').value; });
+
+restart();
+showTarget();
+</script>
