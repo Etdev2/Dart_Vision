@@ -11,3 +11,6 @@ dist/
 data/
 runs/
 *.log
+
+# Scratch output from driving the web page in a headless browser
+web/**/*.png

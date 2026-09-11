@@ -69,7 +69,7 @@ Generate a scene manifest for a renderer to consume:
 python -m dartvision.synthetic.generate --out data/synthetic --setups 3 --sessions 4 --images 40
 ```
 
-539 tests.
+542 Python tests, plus 7 parity tests for the browser port.
 
 Train a smoke run once a manifest is rendered:
 
@@ -105,6 +105,19 @@ of it without a logged reason.
 ```bash
 pip install -e '.[dev]' && pytest
 ```
+
+## The app
+
+`web/` is the front end's foundation: the decision logic ported to plain ES modules that run in a browser today and import unchanged into Next.js.
+
+```bash
+python3 -m http.server 8000     # then open http://localhost:8000/web/
+node --test web/test/parity.test.mjs
+```
+
+Two screens. **Mount** takes a photo from where you plan to put the phone, you tap the eight landmarks, and it tells you your mounting angle and whether the framing can support a score — no model needed, and useful the day before any training data exists. **Match** drives the real `MatchSession` from taps on a board, showing the whole loop including the confirmation queue and correction.
+
+The port is checked rather than trusted: `web/fixtures/parity.json` is generated from the Python, the JavaScript is asserted to reproduce it, and a Python test fails if the fixtures go stale.
 
 ## Core idea
 
