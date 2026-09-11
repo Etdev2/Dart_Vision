@@ -25,33 +25,40 @@ Inference runs only on **settled** frames — the scene still, no dart in flight
 
 Measured on this repository's own model, unoptimised fp32 on four CPU threads — deliberately a pessimistic proxy, since it uses no NPU, no quantisation and no graph optimisation:
 
-| Backbone | Input | 10 mm ring | GMACs | ms/frame | Params | int8 size |
-| --- | --- | --- | --- | --- | --- | --- |
-| resnet18 | 512 | 9.1 px | 11.42 | 60 | 11.3 M | 11.3 MB |
-| resnet18 | **640** | **11.4 px** | 17.85 | 115 | 11.3 M | 11.3 MB |
-| resnet18 | 768 | 13.6 px | 25.70 | 156 | 11.3 M | 11.3 MB |
-| efficientnet_b0 | 640 | 11.4 px | 4.63 | 113 | 3.7 M | 3.7 MB |
-| mobilenetv3_small | 640 | 11.4 px | 1.19 | 33 | 1.0 M | 1.0 MB |
+| Backbone | Input | ms/frame | Compute per leg | GMACs | int8 size |
+| --- | --- | --- | --- | --- | --- |
+| resnet18 | 640 | 96 | 11.5 s | 17.85 | 11.3 MB |
+| **resnet18** | **768** | **162** | **19.5 s** | 25.70 | 11.3 MB |
+| resnet18 | 896 | 200 | 24.0 s | 34.99 | 11.3 MB |
+| efficientnet_b0 | 768 | 171 | 20.5 s | 6.67 | 3.7 MB |
+| mobilenetv3_small | 768 | 27 | 3.3 s | 1.71 | 1.0 MB |
 
-At the recommended configuration — resnet18 at 640, the slowest credible choice — a leg costs `120 × 115 ms ≈ 14 seconds` of compute spread over fifteen minutes. **A 1.5% duty cycle, on the CPU, with none of the acceleration a phone actually has.**
+At the recommended configuration — resnet18 at 768, the slowest credible choice — a leg costs about **20 seconds of compute spread over fifteen minutes. A 2% duty cycle**, on the CPU, with none of the acceleration a phone actually has. Even the largest row is under 3%.
 
 There is no latency problem to solve here. There is barely a latency question.
 
-One thing in that table is worth flagging for anyone tuning it later: efficientnet_b0 does a quarter of resnet18's multiply-accumulates and takes the same wall-clock time. Depthwise separable convolutions are arithmetic-efficient and memory-bound, so MACs badly mispredict their speed. Pick a backbone on measured latency, never on GMACs.
+One thing in that table is worth flagging for anyone tuning it later: efficientnet_b0 does a quarter of resnet18's multiply-accumulates and takes slightly *longer*. Depthwise separable convolutions are arithmetic-efficient and memory-bound, so MACs badly mispredict their speed. Pick a backbone on measured latency, never on GMACs.
 
 ## 4. The input resolution is the real cost lever — and it has a floor
 
-Cost scales with input area, so shrinking the input is the obvious economy. #15's precision budget forbids it.
+Cost scales with input area, so shrinking the input is the obvious economy. #15's precision budget forbids it, and by more than a face-on calculation suggests.
 
-A 10 mm scoring ring must land on 10–20 px for the tip head to have anything to work with. At 80% board fill:
+A 10 mm scoring ring must land on 10–20 px for the tip head to have anything to work with. The easy way to check that is `ring_width × fill × input / board_diameter` — but **that is the face-on number, and nobody mounts a phone face-on** (§2 of #2: that is where the darts are). A board tilted out of the image plane is compressed along the tilt by roughly `sin(elevation)`, and its rings compress with it.
 
-| Model input | 320 | 448 | 512 | **640** | 768 |
-| --- | --- | --- | --- | --- | --- |
-| Ring width | 5.0 px | 7.9 px | **9.1 px** | **11.4 px** | 13.6 px |
+Measured through the perspective a player in #2's recommended 45–65° band actually has, at 85% board fill — median ring width around the double ring:
 
-**The current training default of 512 is under-resolved**, at 9.1 px — below #15's own floor before the model makes a single mistake. 640 is the smallest input that satisfies the budget with any margin, and it is the number this recommendation assumes.
+| Model input | Face-on arithmetic | 45° mount | 55° | 65° |
+| --- | --- | --- | --- | --- |
+| 512 | 9.6 px | 6.8 | 7.9 | 8.7 |
+| 640 | 12.1 px | 8.5 | 9.8 | 10.9 |
+| **768** | 14.5 px | **10.2** | **11.8** | **13.1** |
+| 896 | 16.9 px | 11.9 | 13.8 | 15.3 |
 
-> **Consequence for #17:** `TrainConfig.input_height/input_width` default to 512. That should be reviewed against this table before the training campaign runs, because a campaign at 512 measures a model the precision budget already rules out. Flagged here rather than changed — it is #17's call, and it costs GPU hours.
+**768 is the smallest input that clears #15's floor across the mount band**, and 896 is the first that clears it with margin at the shallow end. The current training default of 512 puts a ring on 7–9 px — well under the floor, before the model makes a single mistake.
+
+> **Correction.** An earlier version of this record recommended 640, computed from the face-on arithmetic in the second column. That overstates the resolution by the `sin(elevation)` factor plus perspective across the board, and 640 does not in fact clear the floor at a realistic mount angle. The correction *raises* the cost and does not change the decision: resnet18 at 896 is still a 2.7% duty cycle.
+
+> **Consequence for #17:** `TrainConfig.input_height/input_width` default to 512. A campaign at 512 measures a model the precision budget already rules out, and one at 640 measures a model that only clears it face-on. Flagged here rather than changed — it is #17's call, and it costs GPU hours.
 
 This is also why the answer is not simply "use MobileNet and stop worrying." The backbone is cheap to shrink; the input is not.
 
@@ -105,7 +112,7 @@ Browser capabilities move quickly, and this record should not be trusted on them
 | --- | --- |
 | Sustained `getUserMedia` + wake lock across a 15-minute leg, iOS and Android | The single finding that would force a native wrapper |
 | WebGPU availability and fallback to WASM on target devices | Sets the real per-inference latency; §3 says even the fallback is sufficient |
-| Measured latency of the exported model in-browser, at 640 input | §3 is a CPU proxy, not a browser measurement |
+| Measured latency of the exported model in-browser, at 768 input | §3 is a CPU proxy, not a browser measurement |
 | Cache API behaviour for a ~12 MB model asset, including eviction | Eviction mid-leg must degrade gracefully, not crash |
 | Thermal behaviour with the camera open for a full session | The dominant battery and thermal cost, and it is not the model |
 
