@@ -4,12 +4,20 @@
 <title>Dart Vision</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2318181b'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23b91c1c' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='none' stroke='%2315803d' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315803d'/%3E%3C/svg%3E">
 <style>
+  /* Slate neutrals rather than pure grey: the board's own greens and reds are
+     saturated, and a cool ground keeps them from reading as a warning. */
   :root { --bg:#f8fafc; --panel:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
           --accent:#2563eb; --ok:#059669; --warn:#b45309; --bad:#dc2626; }
+  /* Unstamped root + a dark OS. Guarded so an explicit light choice still wins. */
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#0f172a; --panel:#1e293b; --ink:#e2e8f0; --muted:#94a3b8; --line:#334155;
-            --accent:#60a5fa; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+    :root:not([data-theme="light"]) {
+      --bg:#0f172a; --panel:#1e293b; --ink:#e2e8f0; --muted:#94a3b8; --line:#334155;
+      --accent:#60a5fa; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
   }
+  /* An explicit dark choice, whatever the OS says. */
+  :root[data-theme="dark"] {
+    --bg:#0f172a; --panel:#1e293b; --ink:#e2e8f0; --muted:#94a3b8; --line:#334155;
+    --accent:#60a5fa; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   [hidden] { display:none !important; }
   body { margin:0; background:var(--bg); color:var(--ink); padding-bottom:env(safe-area-inset-bottom);
@@ -51,13 +59,15 @@
   .player.busted .detail { color:var(--bad); }
   .player .who { font-size:13px; color:var(--muted); font-weight:600; }
   .player .legs { color:var(--accent); }
-  .player b { display:block; font-size:34px; font-weight:700; letter-spacing:-.03em; line-height:1.1; }
+  .player b { display:block; font-size:34px; font-weight:700; letter-spacing:-.03em; line-height:1.1;
+              font-variant-numeric:tabular-nums; }
   .player .detail { font-size:12px; }
   .banner { background:var(--accent); color:#fff; border-radius:10px; padding:12px 14px; display:flex;
             gap:12px; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; }
   .banner .headline { font-size:18px; }
   .banner button { background:#fff; color:var(--accent); border-color:#fff; }
-  .big { font-size:30px; font-weight:700; letter-spacing:-.02em; }
+  .big { font-size:30px; font-weight:700; letter-spacing:-.02em;
+         font-variant-numeric:tabular-nums; }
   .prompt-block { min-height:70px; }
   .throws { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; min-height:32px; }
   .throw { border:1px solid var(--line); border-radius:8px; padding:5px 9px; font-size:13px; background:var(--bg); }
@@ -316,7 +326,11 @@ function render() {
     let state = `${game.legFor(p).dartsThrown} darts this leg`;
     if (l?.checkedOut) state = 'checked out';
     else if (l?.busted) state = 'bust — score stands';
-    else if (active) state = `throwing · dart ${Math.min(session.visit.length+1,3)} of 3`;
+    // The prompt already owns "dart n of 3" for the dart that just landed.
+    // Counting the next one here put two different numbers on one screen.
+    else if (active) state = session.visit.length
+      ? `${session.visit.length} dart${session.visit.length === 1 ? '' : 's'} in`
+      : 'to throw';
     return `<div class="player${active?' active':''}${l?.busted?' busted':''}">
       <div class="who">${p}<span class="legs"> · ${game.wonLegs[p]}</span></div>
       <b>${remaining}</b><div class="detail">${state}</div></div>`;
@@ -368,6 +382,18 @@ boardCanvas.addEventListener('click', (e) => {
 });
 $('conf').addEventListener('input', () => { $('conf-value').textContent = $('conf').value; });
 
-restart();
+function openMidLeg() {
+  restart();
+  const T20 = { segment: 20, multiplier: 3 };
+  const S5 = { segment: 5, multiplier: 1 };
+  visits.push([T20, T20, T20], [S5, S5, { segment: 1, multiplier: 1 }]);
+  // Two darts already in the board for the visit in progress, the second of
+  // them close enough to a wire that it is waiting to be asked about.
+  session.recordThrow(9, 103, 0.99);
+  session.recordThrow(0, 97.6, 0.88);
+  render();
+}
+
+openMidLeg();
 showTarget();
 </script>

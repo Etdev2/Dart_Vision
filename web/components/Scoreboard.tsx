@@ -14,7 +14,6 @@
  * player needs to know to stop throwing.
  */
 
-import { DARTS_PER_VISIT } from '@/lib/x01.js';
 
 type Game = {
   players: string[];
@@ -44,8 +43,11 @@ export default function Scoreboard({
           let state = `${game.legFor(player).dartsThrown} darts this leg`;
           if (live?.checkedOut) state = 'checked out';
           else if (live?.busted) state = 'bust — score stands';
+          // The prompt already owns "dart n of 3" for the dart that just
+          // landed. Counting the next one here put two different numbers on
+          // the same screen.
           else if (active) {
-            state = `throwing · dart ${Math.min(visitDarts + 1, DARTS_PER_VISIT)} of ${DARTS_PER_VISIT}`;
+            state = visitDarts ? `${visitDarts} dart${visitDarts === 1 ? '' : 's'} in` : 'to throw';
           }
 
           return (
