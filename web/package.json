@@ -2,7 +2,8 @@
   "name": "dartvision-web",
   "version": "0.1.0",
   "private": true,
-  "description": "Dart Vision — mobile-first scorer. Decision logic in lib/ is a checked port of src/dartvision/.",
+  "description": "Dart Vision \u2014 mobile-first scorer. Decision logic in lib/ is a checked port of src/dartvision/.",
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -13,10 +14,5 @@
     "next": "16.3.5",
     "react": "19.3.0",
     "react-dom": "19.3.0"
-  },
-  "devDependencies": {
-    "@types/node": "22.20.2",
-    "@types/react": "19.3.0",
-    "typescript": "7.0.2"
   }
 }

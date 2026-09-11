@@ -20,6 +20,7 @@ import numpy as np
 from dartvision.calibrate import assess_framing
 from dartvision.geometry.board import BDO_BOARD, nearest_boundary, score_at
 from dartvision.geometry.calibration import calibration_points_8, estimate_homography
+from dartvision.game import Dart, X01Rules, play, replay
 from dartvision.geometry.camera import CameraPose, board_to_image_matrix
 from dartvision.synthetic.scene import focal_for_board_fill
 
@@ -124,6 +125,87 @@ def homography_cases() -> list[dict]:
     return cases
 
 
+def x01_cases() -> list[dict]:
+    """Leg and match folds, weighted toward the busts.
+
+    A bust is where a scorer goes wrong, and the three kinds do not look alike
+    from the outside -- below zero, finishing on a single, and leaving one.
+    """
+    T20, T19, S20, S1 = Dart(20, 3), Dart(19, 3), Dart(20, 1), Dart(1, 1)
+    nine = [T20] * 6 + [T20, T19, Dart(12, 2)]
+
+    legs: list[tuple[list[Dart], X01Rules]] = [
+        ([T20, T20, S20], X01Rules()),
+        (nine, X01Rules()),
+        (nine + [T20, T20], X01Rules()),                  # darts after the win
+        ([T20], X01Rules(start=40)),                      # below zero
+        ([Dart(13, 3)], X01Rules(start=40)),              # leaves 1
+        ([S20, S20], X01Rules(start=40)),                 # finishes on a single
+        ([Dart(20, 2)], X01Rules(start=40)),              # a clean checkout
+        ([Dart(25, 2)], X01Rules(start=50)),              # the double bull
+        ([Dart(25, 1)], X01Rules(start=50)),              # 25 is not a double
+        ([S20, S20], X01Rules(start=40, double_out=False)),
+        ([Dart(13, 3)], X01Rules(start=40, double_out=False)),
+        ([T20, S20, T19, Dart(20, 2), T20], X01Rules(double_in=True)),
+        ([T20, Dart(19, 1), T20], X01Rules(start=100)),   # bust mid-visit
+        ([Dart(0, 0), T20, Dart(0, 0)], X01Rules()),      # misses
+    ]
+
+    cases = []
+    for darts, rules in legs:
+        state = replay(darts, rules)
+        cases.append({
+            "kind": "leg",
+            "rules": {"start": rules.start, "doubleOut": rules.double_out,
+                      "doubleIn": rules.double_in},
+            "darts": [[d.segment, d.multiplier] for d in darts],
+            "expected": {
+                "remaining": state.remaining,
+                "winner": state.winner,
+                "darts_thrown": state.darts_thrown,
+                "visit_score": state.visit_score,
+                "three_dart_average": round(state.three_dart_average, 6),
+                "outcomes": [r.outcome.value for r in state.results],
+                "reasons": [r.reason for r in state.results],
+                "notations": [r.dart.notation for r in state.results],
+            },
+        })
+
+    # A whole match, including the throw alternating between legs.
+    filler = [S1] * 3
+    def leg_visits(a_first: bool) -> list[list[Dart]]:
+        out: list[list[Dart]] = []
+        for chunk in ([T20] * 3, [T20] * 3, [T20, T19, Dart(12, 2)]):
+            if not a_first:
+                out.append(filler)
+            out.append(chunk)
+            if a_first:
+                out.append(filler)
+        if a_first:
+            out.pop()
+        return out
+
+    for legs_to_win, visits in (
+        (1, leg_visits(True)),
+        (2, leg_visits(True) + leg_visits(False)),
+        (2, leg_visits(True) + leg_visits(False) + [[T20] * 3]),
+    ):
+        game = play(visits, players=("A", "B"), legs_to_win=legs_to_win)
+        cases.append({
+            "kind": "match",
+            "legs_to_win": legs_to_win,
+            "visits": [[[d.segment, d.multiplier] for d in v] for v in visits],
+            "expected": {
+                "remaining": game.remaining,
+                "won_legs": game.won_legs,
+                "winner": game.winner,
+                "current_player": game.current_player,
+                "leg_number": game.leg_number,
+            },
+        })
+    return cases
+
+
 def main(argv: list[str] | None = None) -> int:
     """Writes to `web/fixtures/parity.json`, or to a path given as argv[1].
 
@@ -144,10 +226,12 @@ def main(argv: list[str] | None = None) -> int:
         "scoring": scoring_cases(),
         "homography": homography_cases(),
         "framing": framing_cases(),
+        "x01": x01_cases(),
     }
     out.write_text(json.dumps(payload), encoding="utf-8")
     print(f"wrote {out} — {len(payload['scoring'])} scoring, "
-          f"{len(payload['homography'])} homography, {len(payload['framing'])} framing cases")
+          f"{len(payload['homography'])} homography, {len(payload['framing'])} framing, "
+          f"{len(payload['x01'])} x01 cases")
     return 0
 
 

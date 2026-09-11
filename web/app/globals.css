@@ -87,3 +87,24 @@ label.file input { display:none; }
 
 .note { color:var(--muted); font-size:13px; }
 .note code { background:var(--bg); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:12px; }
+
+.scoreboard { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
+.player {
+  background:var(--bg); border:1px solid var(--line); border-radius:10px;
+  padding:10px 12px;
+}
+.player.active { border-color:var(--accent); box-shadow:inset 3px 0 0 var(--accent); }
+.player.busted { border-color:var(--bad); box-shadow:inset 3px 0 0 var(--bad); }
+.player.busted .detail { color:var(--bad); }
+.player .who { font-size:13px; color:var(--muted); font-weight:600; }
+.player .legs { color:var(--accent); }
+.player b { display:block; font-size:34px; font-weight:700; letter-spacing:-.03em; line-height:1.1; }
+.player .detail { font-size:12px; }
+
+.banner {
+  background:var(--accent); color:#fff; border-radius:10px; padding:12px 14px;
+  display:flex; gap:12px; align-items:center; justify-content:space-between;
+  margin-bottom:12px; flex-wrap:wrap;
+}
+.banner .headline { font-size:18px; }
+.banner button { background:#fff; color:var(--accent); border-color:#fff; }

@@ -1,53 +1,116 @@
 'use client';
 
 /**
- * The match loop, driven by the real `MatchSession`.
+ * The match loop: the vision side and the rules side, joined.
  *
- * The session is the port of `src/dartvision/match/session.py`, so this
- * component holds no scoring or state-machine logic of its own -- it renders
- * whatever `session.prompt()` says and turns taps into calls. That is the
- * point of the boundary: the rules of the loop are tested in Python, checked
- * in the port, and the React here is a view.
+ * Two engines, deliberately kept apart. `MatchSession` owns the visit -- what
+ * the screen says, which darts need confirming, how a correction is recorded.
+ * The X01 engine owns the game -- remaining, busts, checkouts, whose turn.
+ * Neither knows about the other, and this component is the only place they
+ * meet: a completed visit goes from one to the other when the darts come out.
  *
- * A real build swaps `onThrow` for the stream layer's `throw` events. Tapping
- * stands in for a dart landing until there is a model.
+ * That is `AGENTS.md`'s guardrail made concrete. Vision never decides a rule,
+ * and the rules never see a confidence.
+ *
+ * Tapping the board stands in for a dart landing until there is a model; a real
+ * build swaps `onThrow` for the stream layer's throw events.
  */
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { CONFIRMING, MatchSession } from '@/lib/match.js';
+import { BUST, WON, dart, play, replay } from '@/lib/x01.js';
 import Dartboard from '@/components/Dartboard';
+import Scoreboard, { type Provisional } from '@/components/Scoreboard';
+
+const PLAYERS = ['You', 'Them'];
+const LEGS_TO_WIN = 2;
+
+/** A visit as the rules see it: segments and multipliers, no confidence. */
+type Visit = { segment: number; multiplier: number }[];
+
+function newSession() {
+  const session = new MatchSession();
+  session.setCalibration({ scoringPossible: true, calibrationId: 'demo' });
+  return session;
+}
 
 export default function MatchLoop() {
-  const sessionRef = useRef<MatchSession | null>(null);
-  if (sessionRef.current === null) {
-    const session = new MatchSession();
-    session.setCalibration({ scoringPossible: true, calibrationId: 'demo' });
-    sessionRef.current = session;
-  }
-  const session = sessionRef.current;
-
+  const [session, setSession] = useState(newSession);
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const [confidence, setConfidence] = useState(0.97);
   const [, setTick] = useState(0);
   const render = () => setTick((n) => n + 1);
-  const [confidence, setConfidence] = useState(0.97);
 
+  const game = play(visits, { players: PLAYERS, legsToWin: LEGS_TO_WIN });
+
+  // The running score, folded from the current player's leg plus the darts
+  // already in the board. Same fold, so it cannot disagree with the value that
+  // gets recorded when the visit settles.
+  const provisional: Provisional | null = session.visit.length
+    ? (() => {
+        const leg = game.legFor(game.currentPlayer);
+        const thrown = leg.results.map((r) => r.dart);
+        const inFlight: Visit = session.visit.map((t) => ({
+          segment: t.detected.segment, multiplier: t.detected.multiplier,
+        }));
+        const live = replay([...thrown, ...inFlight], game.rules);
+        const last = live.results[live.results.length - 1];
+        return {
+          remaining: live.remaining,
+          busted: last?.outcome === BUST,
+          checkedOut: last?.outcome === WON,
+        };
+      })()
+    : null;
   const prompt = session.prompt();
   const confirming = prompt.state === CONFIRMING;
+  const over = game.winner !== null;
 
   const onThrow = (x: number, y: number) => {
+    if (over) return;
     try {
       if (confirming && prompt.throwId) session.correct(prompt.throwId, x, y);
       else session.recordThrow(x, y, confidence);
     } catch {
-      // The visit is full, or there is no calibration. The prompt already
-      // says so; a thrown error is not the player's problem.
+      // Visit full, or no calibration. The prompt already says so.
     }
     render();
   };
 
-  const act = (fn: () => void) => () => { fn(); render(); };
+  /**
+   * The darts come out: hand the visit to the rules.
+   *
+   * This is the only crossing point. The vision side has finished deciding
+   * what each dart was -- including any correction -- so the rules receive a
+   * settled visit rather than a stream it would have to revise.
+   */
+  const collect = () => {
+    const visit: Visit = session.visit.map((t) => ({
+      segment: t.detected.segment,
+      multiplier: t.detected.multiplier,
+    }));
+    visit.forEach((d) => dart(d.segment, d.multiplier));   // reject the impossible early
+    setVisits((current) => [...current, visit]);
+    session.boardCleared();
+    render();
+  };
+
+  const restart = () => {
+    setSession(newSession());
+    setVisits([]);
+  };
 
   return (
     <>
+      {over && (
+        <div className="banner">
+          <div className="headline">{game.winner} won the match</div>
+          <button onClick={restart}>New match</button>
+        </div>
+      )}
+
+      <Scoreboard game={game} visitDarts={session.visit.length} provisional={provisional} />
+
       <div className="card">
         <div className="prompt-block">
           <div className="big">{prompt.headline}</div>
@@ -55,13 +118,13 @@ export default function MatchLoop() {
         </div>
 
         <div className="throws">
-          {session.visit.map((dart) => {
-            const unsure = session.pending.includes(dart);
-            const corrected = dart.source === 'correction';
+          {session.visit.map((thrown) => {
+            const unsure = session.pending.includes(thrown);
+            const corrected = thrown.source === 'correction';
             const className = corrected ? 'throw corrected' : unsure ? 'throw unsure' : 'throw';
             return (
-              <span key={dart.id} className={className}>
-                {dart.detected.notation}{corrected ? ' ✎' : unsure ? ' ?' : ''}
+              <span key={thrown.id} className={className}>
+                {thrown.detected.notation}{corrected ? ' ✎' : unsure ? ' ?' : ''}
               </span>
             );
           })}
@@ -69,18 +132,18 @@ export default function MatchLoop() {
 
         <div className="row" style={{ marginTop: 12 }}>
           {confirming && prompt.throwId ? (
-            <button className="primary" onClick={act(() => session.confirm(prompt.throwId!))}>
+            <button className="primary" onClick={() => { session.confirm(prompt.throwId!); render(); }}>
               Yes, that’s right
             </button>
           ) : (
             <>
               {session.visit.length > 0 && (
-                <button className="primary" onClick={act(() => session.boardCleared())}>
+                <button className="primary" onClick={collect} disabled={over}>
                   Darts collected
                 </button>
               )}
-              {prompt.actions.includes('record_miss') && (
-                <button onClick={act(() => { try { session.recordMiss(); } catch { /* full */ } })}>
+              {prompt.actions.includes('record_miss') && !over && (
+                <button onClick={() => { try { session.recordMiss(); } catch { /* full */ } render(); }}>
                   Missed the board
                 </button>
               )}
@@ -90,7 +153,9 @@ export default function MatchLoop() {
       </div>
 
       <div className="card">
-        <h2>{confirming ? 'Tap the board to correct this dart' : 'Tap the board to throw'}</h2>
+        <h2>
+          {over ? 'Match over' : confirming ? 'Tap the board to correct this dart' : `Tap the board — ${game.currentPlayer} to throw`}
+        </h2>
         <Dartboard
           darts={session.visit.map((d) => ({ x: d.boardXMm, y: d.boardYMm }))}
           onThrow={onThrow}

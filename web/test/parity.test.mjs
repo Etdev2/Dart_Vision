@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { nearestBoundary, scoreAt } from '../lib/board.js';
 import { apply, estimateHomography } from '../lib/homography.js';
 import { assessFraming } from '../lib/framing.js';
+import { dart, play, replay, rules, threeDartAverage, visitScore } from '../lib/x01.js';
 
 const fixtures = JSON.parse(
   readFileSync(fileURLToPath(new URL('../fixtures/parity.json', import.meta.url)), 'utf8'),
@@ -129,5 +130,48 @@ test('every verdict is exercised by the fixtures', () => {
   const verdicts = new Set(fixtures.framing.map((c) => c.expected.verdict));
   for (const expected of ['ready', 'marginal', 'unusable']) {
     assert.ok(verdicts.has(expected), `fixtures never produce ${expected}`);
+  }
+});
+
+const asDart = ([segment, multiplier]) => dart(segment, multiplier);
+
+test('the X01 rules match the Python, leg for leg', () => {
+  for (const c of fixtures.x01.filter((x) => x.kind === 'leg')) {
+    const leg = replay(c.darts.map(asDart), rules(c.rules));
+    const want = c.expected;
+    const label = `start ${c.rules.start}, ${c.darts.length} darts`;
+
+    assert.equal(leg.remaining, want.remaining, `remaining — ${label}`);
+    assert.equal(leg.winner, want.winner, `winner — ${label}`);
+    assert.equal(leg.dartsThrown, want.darts_thrown, `darts — ${label}`);
+    assert.equal(visitScore(leg), want.visit_score, `visit score — ${label}`);
+    assert.deepEqual(leg.results.map((r) => r.outcome), want.outcomes, `outcomes — ${label}`);
+    // The reason is user-facing text, so a reworded bust is a visible change.
+    assert.deepEqual(leg.results.map((r) => r.reason), want.reasons, `reasons — ${label}`);
+    assert.ok(Math.abs(threeDartAverage(leg) - want.three_dart_average) < 1e-6);
+  }
+});
+
+test('every way to bust is exercised', () => {
+  const reasons = new Set(
+    fixtures.x01.flatMap((c) => (c.kind === 'leg' ? c.expected.reasons : [])).filter(Boolean),
+  );
+  for (const expected of ['went below zero', 'finished on a single', 'left 1, which no double can finish']) {
+    assert.ok([...reasons].some((r) => r === expected), `fixtures never produce: ${expected}`);
+  }
+});
+
+test('matches fold the same way, including the throw alternating', () => {
+  for (const c of fixtures.x01.filter((x) => x.kind === 'match')) {
+    const game = play(
+      c.visits.map((visit) => visit.map(asDart)),
+      { players: ['A', 'B'], legsToWin: c.legs_to_win },
+    );
+    const want = c.expected;
+    assert.deepEqual(game.remaining, want.remaining);
+    assert.deepEqual(game.wonLegs, want.won_legs);
+    assert.equal(game.winner, want.winner);
+    assert.equal(game.currentPlayer, want.current_player);
+    assert.equal(game.legNumber, want.leg_number);
   }
 });
