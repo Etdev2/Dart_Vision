@@ -1,0 +1,89 @@
+:root {
+  --bg:#f8fafc; --panel:#fff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+  --accent:#2563eb; --ok:#059669; --warn:#b45309; --bad:#dc2626;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#0f172a; --panel:#1e293b; --ink:#e2e8f0; --muted:#94a3b8; --line:#334155;
+    --accent:#60a5fa; --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
+  }
+}
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+/* A class that sets `display` outranks the user agent's [hidden] rule. */
+[hidden] { display:none !important; }
+
+body {
+  margin:0; background:var(--bg); color:var(--ink);
+  font:15px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+
+.chrome {
+  display:flex; gap:8px; align-items:center; padding:10px 14px;
+  border-bottom:1px solid var(--line); background:var(--panel);
+  position:sticky; top:0; z-index:10;
+}
+.chrome h1 { font-size:15px; margin:0; font-weight:650; letter-spacing:-.01em; }
+.tabs { margin-left:auto; display:flex; gap:4px; }
+.tab {
+  border:1px solid var(--line); background:transparent; color:var(--muted);
+  padding:6px 12px; border-radius:999px; font:inherit; font-size:13px;
+  cursor:pointer; text-decoration:none; display:inline-block;
+}
+.tab[data-active="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+main { padding:14px; max-width:640px; margin:0 auto; }
+.card {
+  background:var(--panel); border:1px solid var(--line); border-radius:12px;
+  padding:14px; margin-bottom:12px;
+}
+h2 {
+  font-size:13px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); margin:0 0 10px; font-weight:600;
+}
+.row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+button, label.file {
+  border:1px solid var(--line); background:var(--panel); color:var(--ink);
+  padding:9px 14px; border-radius:9px; font:inherit; font-size:14px;
+  cursor:pointer; min-height:40px;
+}
+button.primary, label.file { background:var(--accent); border-color:var(--accent); color:#fff; }
+button:disabled { opacity:.45; cursor:default; }
+label.file input { display:none; }
+
+.stage {
+  position:relative; background:#000; border-radius:12px; overflow:hidden;
+  aspect-ratio:3/4; display:flex; align-items:center; justify-content:center;
+}
+.stage canvas, .stage video {
+  position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+}
+.stage .hint { color:#94a3b8; font-size:13px; padding:24px; text-align:center; }
+
+.verdict { display:flex; gap:10px; align-items:flex-start; }
+.dot { width:10px; height:10px; border-radius:50%; margin-top:7px; flex:none; }
+.ready .dot { background:var(--ok); }
+.marginal .dot { background:var(--warn); }
+.unusable .dot { background:var(--bad); }
+.headline { font-weight:650; font-size:17px; letter-spacing:-.01em; }
+.detail { color:var(--muted); font-size:14px; }
+
+.stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(108px,1fr)); gap:10px; margin-top:12px; }
+.stat { background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:9px 10px; }
+.stat b { display:block; font-size:19px; font-weight:650; letter-spacing:-.02em; }
+.stat span { color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; }
+
+.target { display:flex; gap:12px; align-items:center; }
+.target svg { flex:none; }
+
+.big { font-size:30px; font-weight:700; letter-spacing:-.02em; }
+/* Reserved, not grown into: the throws row appearing after the first dart
+   shifted the board 31px mid-visit, so the second tap missed what it aimed at. */
+.prompt-block { min-height:70px; }
+.throws { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; min-height:32px; }
+.throw { border:1px solid var(--line); border-radius:8px; padding:5px 9px; font-size:13px; background:var(--bg); }
+.throw.unsure { border-color:var(--warn); color:var(--warn); }
+.throw.corrected { border-color:var(--accent); color:var(--accent); }
+
+.note { color:var(--muted); font-size:13px; }
+.note code { background:var(--bg); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:12px; }

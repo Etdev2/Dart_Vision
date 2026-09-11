@@ -12,6 +12,7 @@ its licence fails the build.
 
 from __future__ import annotations
 
+import json
 import re
 import tomllib
 from pathlib import Path
@@ -21,6 +22,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 REGISTER = ROOT / "docs" / "licence-register.md"
 PYPROJECT = ROOT / "pyproject.toml"
+PACKAGE_JSON = ROOT / "web" / "package.json"
 
 # Names that must never appear as a dependency. #16 established that
 # Ultralytics' AGPL reaches the weights trained with it, so a stray import
@@ -45,6 +47,19 @@ def declared_dependencies() -> set[str]:
     return names
 
 
+def declared_node_dependencies() -> set[str]:
+    """Everything the browser bundle pulls in.
+
+    These ship to the user exactly as the Python ones ship to the trainer, so
+    they belong under the same discipline. Dev-only tooling is excluded: it
+    never reaches a user.
+    """
+    if not PACKAGE_JSON.exists():
+        return set()
+    data = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))
+    return {name.lower() for name in data.get("dependencies", {})}
+
+
 def registered() -> str:
     return REGISTER.read_text(encoding="utf-8").lower()
 
@@ -56,6 +71,27 @@ def test_every_dependency_has_a_licence_recorded():
         f"{missing} appear in pyproject.toml but not in docs/licence-register.md. "
         "Record the licence before merging — checking afterwards is how #13 happened."
     )
+
+
+def test_every_browser_dependency_has_a_licence_recorded():
+    """The app ships to users, so its dependencies are not a lesser category."""
+    missing = sorted(d for d in declared_node_dependencies() if f"`{d}`" not in registered())
+    assert not missing, (
+        f"{missing} appear in web/package.json but not in docs/licence-register.md."
+    )
+
+
+def test_the_ported_logic_has_no_dependencies_of_its_own():
+    """`web/lib/` is the decision logic. It should not acquire a supply chain:
+    everything it needs is arithmetic, and a dependency there would ship a
+    third party's code into the scoring path."""
+    for module in (ROOT / "web" / "lib").glob("*.js"):
+        for line in module.read_text(encoding="utf-8").splitlines():
+            match = re.match(r"\s*import\s+.*from\s+['\"]([^'\"]+)['\"]", line)
+            if match:
+                assert match.group(1).startswith("."), (
+                    f"{module.name} imports {match.group(1)!r}; web/lib must stay dependency-free"
+                )
 
 
 def test_the_register_is_not_empty_of_the_things_we_actually_use():

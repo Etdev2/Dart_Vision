@@ -20,6 +20,20 @@
 | `pillow` | Image loading in the dataset | MIT-CMU (HPND) | ✅ | Declared |
 | `pytest` | Tests only; does not ship | MIT | ✅ | Declared |
 
+## Web application dependencies
+
+Shipped to the browser, so these carry the same weight as the Python ones.
+
+| Distribution | Used for | Licence | Commercial use | Status |
+| --- | --- | --- | --- | --- |
+| `next` | The application framework (#4: static export, no server) | MIT | ✅ | Declared |
+| `react` | UI runtime | MIT | ✅ | Declared |
+| `react-dom` | UI runtime | MIT | ✅ | Declared |
+
+`web/lib/` is our own code — a port of `src/dartvision/`, checked against it by
+`web/test/parity.test.mjs`. It has no third-party dependencies at all, which is
+deliberate: the decision logic should not acquire a supply chain.
+
 ## Tools used but not distributed
 
 | Component | Used for | Licence | Notes |

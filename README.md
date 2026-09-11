@@ -69,7 +69,7 @@ Generate a scene manifest for a renderer to consume:
 python -m dartvision.synthetic.generate --out data/synthetic --setups 3 --sessions 4 --images 40
 ```
 
-542 Python tests, plus 7 parity tests for the browser port.
+544 Python tests, plus 7 parity tests for the browser port.
 
 Train a smoke run once a manifest is rendered:
 
@@ -111,11 +111,14 @@ pip install -e '.[dev]' && pytest
 `web/` is the front end's foundation: the decision logic ported to plain ES modules that run in a browser today and import unchanged into Next.js.
 
 ```bash
-python3 -m http.server 8000     # then open http://localhost:8000/web/
-node --test web/test/parity.test.mjs
+cd web && npm install && npm run dev      # http://localhost:3000
+npm run build                             # static export to web/out/
+npm test                                  # parity against the Python
 ```
 
-Two screens. **Mount** takes a photo from where you plan to put the phone, you tap the eight landmarks, and it tells you your mounting angle and whether the framing can support a score — no model needed, and useful the day before any training data exists. **Match** drives the real `MatchSession` from taps on a board, showing the whole loop including the confirmation queue and correction.
+Next.js App Router, exported as **static files with no server** — that is #4's decision made structural rather than intentional: anything needing a server fails the build. `web/lib/` holds the decision logic, and `web/public/standalone.html` is the same thing with no build step at all, for when you just want to open a file.
+
+Two routes. **Mount** takes a photo from where you plan to put the phone, you tap the eight landmarks, and it tells you your mounting angle and whether the framing can support a score — no model needed, and useful the day before any training data exists. **Match** drives the real `MatchSession` from taps on a board, showing the whole loop including the confirmation queue and correction.
 
 The port is checked rather than trusted: `web/fixtures/parity.json` is generated from the Python, the JavaScript is asserted to reproduce it, and a Python test fails if the fixtures go stale.
 
