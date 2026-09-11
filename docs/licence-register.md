@@ -38,6 +38,7 @@ deliberate: the decision logic should not acquire a supply chain.
 
 | Component | Used for | Licence | Notes |
 | --- | --- | --- | --- |
+| ffmpeg | Reading session video in `dartvision.capture` (#26) | LGPL-2.1-or-later (build-dependent) | Invoked as an external program the user installs; nothing here ships or links it, so its terms do not reach our code. A build compiled with `--enable-gpl` is GPL, which is another reason not to bundle one. |
 | Blender | Rendering the synthetic corpus (#25) | GPL-2.0-or-later | GPL covers Blender itself. **Renders are the artist's own work** and carry no GPL obligation — the same reason images made in GIMP are not GPL. `tools/render_blender.py` is our own code, run *inside* Blender via its Python API. |
 
 ## Model weights

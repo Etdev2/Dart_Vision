@@ -59,6 +59,7 @@ First implementation, on the `prototype/` track for #17:
 - `src/dartvision/model/targets.py` — target encoding and decoding (heatmaps, soft-argmax, sub-cell offsets). No training framework required.
 - `src/dartvision/metrics/scoring.py` — [#14](https://github.com/Etdev2/Dart_Vision/issues/14)'s metrics and [#21](https://github.com/Etdev2/Dart_Vision/issues/21)'s gates, including the risk–coverage curve and error concentration.
 - `src/dartvision/geometry/camera.py` — pinhole camera over the board plane.
+- `src/dartvision/capture/` — pulls one still per board state out of a recorded session, so a visit can be filmed rather than photographed. Finds runs of frames where nothing moves, keeps the sharpest of each, and drops runs where nothing actually landed.
 - `src/dartvision/annotate/` — [#26](https://github.com/Etdev2/Dart_Vision/issues/26) capture tooling: session landmark propagation, burst expansion, and placed-dart capture plans.
 - `tools/annotator.html` — browser annotator, no install.
 - `src/dartvision/doctor.py` — reports what this machine can run.
@@ -70,7 +71,7 @@ Generate a scene manifest for a renderer to consume:
 python -m dartvision.synthetic.generate --out data/synthetic --setups 3 --sessions 4 --images 40
 ```
 
-577 Python tests, plus 10 parity tests for the browser port.
+594 Python tests, plus 10 parity tests for the browser port.
 
 Train a smoke run once a manifest is rendered:
 

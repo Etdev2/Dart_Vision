@@ -92,6 +92,40 @@ row number with each photo.
 Mix both kinds: thrown darts for realistic distributions, placed darts for
 deliberate coverage of the hard cases.
 
+## Recording video instead of photographs
+
+Easier, and slightly *better*: the app reads video frames, so training on video
+frames removes a domain gap rather than adding one. Resolution is not the
+constraint — 1080p already puts a 10 mm ring on about 20 px, and the model's
+input is 768 px, so anything above that is discarded in the downscale anyway.
+
+Three settings matter, and the first will ruin a session silently:
+
+1. **Turn video stabilization off.** Electronic stabilization warps and shifts
+   every frame to cancel shake, which breaks the one-landmark-set-per-session
+   assumption invisibly. Nothing downstream would flag it; the labels would
+   simply be slightly wrong everywhere.
+2. **Lock focus and exposure** before recording. The phone adjusts continuously
+   in video, and focus hunting changes the board's apparent geometry.
+3. **Highest bitrate, 4K over 1080p** — not for the pixels, for the
+   compression. Artifacts cluster on thin high-contrast edges, which is exactly
+   what a wire is.
+
+Then **throw, pause about two seconds, throw**. The pause is what the extractor
+looks for:
+
+```bash
+python -m dartvision.capture --video session.mp4 --out data/captures/garage/session-01
+```
+
+It keeps one still per board state — the empty board, then each dart as it
+lands — by finding runs of frames where nothing moves, taking the sharpest
+frame of each run, and dropping runs where nothing actually landed. Four frames
+a visit, 75 visits, 300 images: the same target, without 300 shutter presses.
+
+Check the result with the audit afterwards. If it reports 300 images carrying
+40 images' worth of information, the extraction kept too much.
+
 ## Getting files onto the Mac
 
 - **Shoot JPEG, not HEIC** where the option exists — one less conversion step.
