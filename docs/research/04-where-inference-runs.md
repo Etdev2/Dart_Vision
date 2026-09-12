@@ -58,7 +58,7 @@ Measured through the perspective a player in #2's recommended 45–65° band act
 
 > **Correction.** An earlier version of this record recommended 640, computed from the face-on arithmetic in the second column. That overstates the resolution by the `sin(elevation)` factor plus perspective across the board, and 640 does not in fact clear the floor at a realistic mount angle. The correction *raises* the cost and does not change the decision: resnet18 at 896 is still a 2.7% duty cycle.
 
-> **Consequence for #17:** `TrainConfig.input_height/input_width` default to 512. A campaign at 512 measures a model the precision budget already rules out, and one at 640 measures a model that only clears it face-on. Flagged here rather than changed — it is #17's call, and it costs GPU hours.
+> **Done (2026-09-12).** `TrainConfig` now defaults to 768, and the reasoning lives in `dartvision.model.spec` rather than as a number typed into three config files — `train.config`, `data.torch_dataset` and `eval.runner` each said 512 independently, which is how defaults drift apart. A test fails if it is lowered below what #15's budget supports, and says why.
 
 This is also why the answer is not simply "use MobileNet and stop worrying." The backbone is cheap to shrink; the input is not.
 

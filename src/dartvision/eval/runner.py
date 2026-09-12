@@ -25,6 +25,7 @@ from dartvision.data.labels import Annotation, read_jsonl
 from dartvision.data.splits import HoldoutLedger, split_for_tier
 from dartvision.data.torch_dataset import SceneDataset, collate
 from dartvision.eval.evaluate import FrameResult, evaluate_all, evaluate_frame
+from dartvision.model.spec import DEFAULT_INPUT_PX
 from dartvision.model.targets import (
     decode_landmark_heatmaps,
     decode_tip_targets,
@@ -150,7 +151,8 @@ def evaluate_checkpoint(
     model = load_model(loaded, device)
     frames = predict_frames(
         model, selected, image_root,
-        input_size=(config.get("input_height", 512), config.get("input_width", 512)),
+        input_size=(config.get("input_height", DEFAULT_INPUT_PX),
+                    config.get("input_width", DEFAULT_INPUT_PX)),
         stride=config.get("stride", 4),
         sigma_cells=config.get("sigma_cells", 1.5),
         device=device, batch_size=batch_size,

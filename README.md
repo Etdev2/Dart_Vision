@@ -71,7 +71,7 @@ Generate a scene manifest for a renderer to consume:
 python -m dartvision.synthetic.generate --out data/synthetic --setups 3 --sessions 4 --images 40
 ```
 
-594 Python tests, plus 10 parity tests for the browser port.
+608 Python tests, plus 10 parity tests for the browser port.
 
 Train a smoke run once a manifest is rendered:
 

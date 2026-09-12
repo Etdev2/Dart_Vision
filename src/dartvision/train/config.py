@@ -15,6 +15,8 @@ import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from dartvision.model.spec import DEFAULT_INPUT_PX
+
 __all__ = ["TrainConfig", "RunManifest", "resolve_device"]
 
 
@@ -32,8 +34,8 @@ class TrainConfig:
     stride: int = 4
     pretrained: bool = False
 
-    input_height: int = 512
-    input_width: int = 512
+    input_height: int = DEFAULT_INPUT_PX
+    input_width: int = DEFAULT_INPUT_PX
     sigma_cells: float = 1.5
 
     epochs: int = 20

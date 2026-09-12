@@ -29,6 +29,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from dartvision.model.spec import DEFAULT_INPUT_PX
 from dartvision.data.labels import Annotation, image_filename
 from dartvision.model.targets import encode_landmark_heatmaps, encode_tip_targets
 
@@ -81,7 +82,7 @@ class SceneDataset(Dataset):
         self,
         annotations: Sequence[Annotation],
         image_root: str | Path,
-        input_size: tuple[int, int] = (512, 512),
+        input_size: tuple[int, int] = (DEFAULT_INPUT_PX, DEFAULT_INPUT_PX),
         stride: int = 4,
         sigma_cells: float = 1.5,
         jitter: PhotometricJitter | None = None,

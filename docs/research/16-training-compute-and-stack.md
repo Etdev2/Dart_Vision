@@ -181,8 +181,25 @@ alone. #15's precision budget puts the 10 mm double/treble ring at **10–20 px 
 precision needed to resolve a multiplier at all.
 
 So resolution is bounded below by the physics of the scoring task, not by
-budget. Treat it as an experiment for #17/#18 to settle — measure the accuracy
-cost of dropping resolution before banking the saving.
+budget.
+
+> **Settled (2026-09-12): 768 px.** The floor above was computed face-on, which
+> omits the tilt. #2 put the mount at 45–65° out of the board plane, and a
+> tilted board's rings compress by roughly `sin(elevation)` — so at 512 px a
+> 10 mm ring lands on **6.8 px at the shallow end of the band**, not the 9.7 px
+> the face-on figure suggests. 768 is the smallest input that clears #15's
+> 10 px floor across the whole band.
+>
+> The arithmetic now lives in `dartvision.model.spec` with a test that fails if
+> the default is lowered below what the budget supports, because a campaign run
+> too small does not fail loudly — it completes, reports an accuracy, and that
+> accuracy describes a model already ruled out.
+>
+> **Cost consequence:** scaling by area, a full 16-run campaign moves from the
+> ~37 GPU-hours quoted for 512 px to roughly **83 hours — about $28 at
+> $0.34/hr, $58 at $0.69**. Still inside the $20–80 envelope above, at the top
+> of it rather than the bottom. Clearing the *comfortable* 12 px bar rather
+> than the floor would need 960 px and another half again; not taken.
 
 ### 7.3 Rendering, not training, is likely the bottleneck
 
