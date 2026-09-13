@@ -199,3 +199,49 @@ def test_the_report_names_the_sessions_when_the_camera_moved():
 
     assert "2 viewpoints" in text and "2 session(s)" in text
     assert "the camera moved 1 time(s)" in text
+
+
+def test_a_split_records_how_far_past_the_line_it_was():
+    """Twenty viewpoints is either a phone picked up twenty times or a
+    threshold sitting too close to darts being pulled, and a count cannot tell
+    them apart. A margin can: a real reposition clears the line many times."""
+    def shifted(darts, seed):
+        return np.roll(unattended_board(darts, seed=seed), 55, axis=1)
+
+    frames = (
+        [unattended_board(1, seed=i) for i in range(10)]
+        + [unattended_board(2, seed=50 + i) for i in range(10)]
+        + [shifted(0, seed=500 + i) for i in range(10)]
+        + [shifted(1, seed=600 + i) for i in range(10)]
+    )
+    found = viewpoints(frames, SETTINGS, SETTINGS.analysis_fps)
+
+    assert found[0].split_margin == 0.0, "nothing opened the first viewpoint"
+    assert found[1].split_margin > 1.0, "a split happens only past the line"
+    assert found[1].split_margin > 2.0, (
+        "a whole board displaced sideways is not a borderline call — it clears "
+        "the line by more than the margin the report calls borderline"
+    )
+
+
+def test_the_report_flags_borderline_splits():
+    from dartvision.capture.diagnose import Viewpoint
+
+    views = [
+        Viewpoint(0.0, 10.0, 8, 0.0),
+        Viewpoint(12.0, 20.0, 6, 1.2),        # only just over
+        Viewpoint(22.0, 30.0, 6, 14.0),       # unmistakable
+    ]
+    text = render(scan(unattended_visit(), SETTINGS), [], SETTINGS, views)
+
+    assert "1 of these splits sit under 2x the line" in text
+    assert "obstruction-fraction" in text
+
+
+def test_nothing_is_flagged_when_every_split_is_decisive():
+    from dartvision.capture.diagnose import Viewpoint
+
+    views = [Viewpoint(0.0, 10.0, 8, 0.0), Viewpoint(12.0, 20.0, 6, 9.0)]
+    text = render(scan(unattended_visit(), SETTINGS), [], SETTINGS, views)
+
+    assert "under 2x the line" not in text

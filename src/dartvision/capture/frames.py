@@ -71,6 +71,7 @@ __all__ = [
     "changed_pixel_count",
     "obstructed",
     "viewpoint_groups",
+    "viewpoint_splits",
     "choose_frames",
     "find_ffmpeg",
     "extract",
@@ -347,17 +348,39 @@ def viewpoint_groups(
     if not kept:
         return []
 
+    return [group for group, _ in viewpoint_splits(frames, kept, settings)]
+
+
+def viewpoint_splits(
+    frames: Sequence[np.ndarray],
+    kept: Sequence[int],
+    settings: ExtractionSettings | None = None,
+) -> list[tuple[list[int], float]]:
+    """``viewpoint_groups``, each group paired with how hard its split was.
+
+    The size of the jump that opened a group, as a multiple of the threshold --
+    ``0.0`` for the first group, which nothing opened. A recording that splits
+    into twenty is either a phone picked up twenty times or a threshold sitting
+    too close to the ordinary business of darts being pulled, and the two look
+    identical in a count. They do not look identical in the margins: a real
+    reposition clears the line many times over, and a borderline one sits just
+    past it.
+    """
+    settings = settings or ExtractionSettings()
+    if not kept:
+        return []
+
     budget = settings.obstruction_fraction * np.asarray(frames[0]).size
-    groups: list[list[int]] = [[kept[0]]]
+    found: list[tuple[list[int], float]] = [([kept[0]], 0.0)]
     for previous, index in zip(kept, kept[1:]):
         moved = changed_pixel_count(
             frames[previous], frames[index], settings.change_level
-        ) > budget
-        if moved:
-            groups.append([index])
+        )
+        if moved > budget:
+            found.append(([index], moved / budget))
         else:
-            groups[-1].append(index)
-    return groups
+            found[-1][0].append(index)
+    return found
 
 
 def choose_frames(

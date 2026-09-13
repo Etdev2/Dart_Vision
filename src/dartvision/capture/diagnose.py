@@ -28,7 +28,7 @@ from dartvision.capture.frames import (
     choose_frames,
     find_ffmpeg,
     frame_statistics,
-    viewpoint_groups,
+    viewpoint_splits,
 )
 
 __all__ = [
@@ -97,6 +97,14 @@ class Viewpoint:
     start: float
     end: float
     states: int
+    split_margin: float = 0.0
+    """How far past the threshold the jump that opened this viewpoint was.
+
+    Zero for the first. A phone genuinely picked up clears the line many times
+    over; a value near 1.0 is a split that nearly did not happen, and a
+    recording full of those is a threshold too close to the ordinary business
+    of darts being pulled rather than a phone that moved.
+    """
 
     def clock(self) -> str:
         return f"{_clock(self.start)}-{_clock(self.end)}"
@@ -123,8 +131,8 @@ def viewpoints(
     """
     kept, _, _, _ = choose_frames(frames, settings)
     return [
-        Viewpoint(group[0] / fps, group[-1] / fps, len(group))
-        for group in viewpoint_groups(frames, kept, settings)
+        Viewpoint(group[0] / fps, group[-1] / fps, len(group), margin)
+        for group, margin in viewpoint_splits(frames, kept, settings)
     ]
 
 
@@ -250,14 +258,26 @@ def render(
                   f"time(s), so this recording is {len(usable)} session(s):"]
         for number, view in enumerate(views, start=1):
             note = "" if view.states >= 2 else "   (dropped: too small to annotate)"
+            margin = (f"  split {view.split_margin:5.1f}x over the line"
+                      if number > 1 else "  " + " " * 25)
             lines.append(f"  {number:>2}. {view.clock():>15}   "
-                         f"{view.states:>3} board states{note}")
+                         f"{view.states:>3} states{margin}{note}")
+        marginal = [v for v in views[1:] if v.split_margin < 2.0]
         lines += [
             "  Extraction splits these into their own folders on its own — "
             "landmarks are annotated once",
             "  per folder, so this is not a preference. Nothing to do but run "
             "it.",
         ]
+        if marginal:
+            lines += [
+                f"  {len(marginal)} of these splits sit under 2x the line. A "
+                "phone genuinely picked up clears it",
+                "  many times over, so these may be the threshold catching "
+                "darts being pulled instead.",
+                "  Raise --obstruction-fraction until they stop and the rest "
+                "survive.",
+            ]
 
     lines += ["", "what other settings would have given", "",
               "  still_pixels  hold for  runs  kept  blocked"]
