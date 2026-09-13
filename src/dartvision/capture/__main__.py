@@ -20,8 +20,10 @@ from pathlib import Path
 from dartvision.capture.diagnose import render, scan_video, sweep, viewpoints
 from dartvision.capture.frames import choose_frames, state_jumps
 from dartvision.capture.frames import (
+    VIDEO_SUFFIXES,
     Extraction,
     ExtractionSettings,
+    collect_stills,
     extract_folder,
     extract_sessions,
     find_videos,
@@ -32,13 +34,21 @@ def _clock(seconds: float) -> str:
     return f"{int(seconds) // 60}:{seconds % 60:04.1f}"
 
 
-def _describe(sessions: list[Extraction], fps: float) -> list[str]:
+def _describe(sessions: list[Extraction], fps: float, spans: bool = True) -> list[str]:
+    """One line per session folder.
+
+    ``spans`` off for photographs, whose indices are positions in a folder
+    rather than times in a recording -- printing them as a clock would be a
+    number that looks meaningful and is not.
+    """
     lines = []
     for session in sessions:
         folder = session.files[0].parent.name if session.files else "?"
-        span = (f"{_clock(session.kept[0] / fps)}-{_clock(session.kept[-1] / fps)}"
-                if session.kept else "-")
-        lines.append(f"    {folder:<20} {span:>15}   {len(session.files):>3} stills")
+        when = ""
+        if spans:
+            when = (f"{_clock(session.kept[0] / fps)}-{_clock(session.kept[-1] / fps)}"
+                    if session.kept else "-")
+        lines.append(f"    {folder:<20} {when:>15}   {len(session.files):>3} stills")
     return lines
 
 
@@ -50,6 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--video", help="one recording")
     source.add_argument("--video-dir", help="a folder of recordings")
+    source.add_argument(
+        "--stills",
+        help="a folder of photographs, to sort into one folder per camera "
+             "position — the same split a recording gets",
+    )
     source.add_argument(
         "--framing",
         help="a still, or a folder of them, to measure the board's size in — "
@@ -222,15 +237,31 @@ def _run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if not args.out:
         parser.error("--out is required unless you pass --diagnose")
 
-    if args.video:
+    if args.stills:
+        found = {Path(args.stills): collect_stills(
+            args.stills, args.out, settings, args.prefix, args.min_states,
+            args.overwrite,
+        )}
+    elif args.video:
         found = {Path(args.video): extract_sessions(
             args.video, args.out, settings, args.prefix, args.min_states,
             args.overwrite,
         )}
     else:
         videos = find_videos(args.video_dir)
+        nested = sorted({
+            path.parent for path in Path(args.video_dir).rglob("*")
+            if path.is_file() and path.suffix.lower() in VIDEO_SUFFIXES
+            and path.parent != Path(args.video_dir)
+        })
+        if nested:
+            print("videos also sit in subfolders, which are not read from here:")
+            for folder in nested[:6]:
+                print(f"  {folder}")
+            print("  Run each as its own --video-dir; they are separate "
+                  "sessions either way.\n")
         if not videos:
-            print(f"no videos in {args.video_dir}")
+            print(f"no videos directly in {args.video_dir}")
             return 1
         print(f"reading {len(videos)} video(s) from {args.video_dir}\n")
         found = extract_folder(
@@ -242,14 +273,20 @@ def _run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     sessions = 0
     for video, produced in found.items():
         read = produced[0].frames_read if produced else 0
-        minutes = read / max(args.analysis_fps, 1e-9) / 60
-        print(f"  {video.name} — {read} frames (~{minutes:.1f} min), "
-              f"{len(produced)} camera position(s)")
-        print("\n".join(_describe(produced, args.analysis_fps)))
+        if args.stills:
+            print(f"  {video.name} — {read} photograph(s), "
+                  f"{len(produced)} camera position(s)")
+        else:
+            minutes = read / max(args.analysis_fps, 1e-9) / 60
+            print(f"  {video.name} — {read} frames (~{minutes:.1f} min), "
+                  f"{len(produced)} camera position(s)")
+        print("\n".join(_describe(produced, args.analysis_fps, not args.stills)))
         stills += sum(len(s.files) for s in produced)
         sessions += len(produced)
 
     print(f"\n{stills} stills across {sessions} session folder(s) in {args.out}")
+    if args.stills:
+        print("Originals were copied, not moved.")
     if not stills:
         print("\nNothing kept. Run the same command with --diagnose instead of "
               "--out to see why.")

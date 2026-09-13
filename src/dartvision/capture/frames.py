@@ -80,6 +80,10 @@ __all__ = [
     "extract_sessions",
     "extract_folder",
     "find_videos",
+    "find_stills",
+    "group_stills",
+    "collect_stills",
+    "STILL_SUFFIXES",
     "existing_sessions",
     "clear_sessions",
     "VIDEO_SUFFIXES",
@@ -552,6 +556,13 @@ def _analysis_frames(
 
 VIDEO_SUFFIXES = (".mov", ".mp4", ".m4v", ".avi", ".mkv", ".mpg", ".mpeg")
 
+STILL_SUFFIXES = (".jpg", ".jpeg", ".png")
+
+# iPhones shoot HEIC by default and ffmpeg does not read it. Named separately
+# so the refusal can say what to do rather than reporting a file that plainly
+# is a photograph as not being one.
+UNREADABLE_STILL_SUFFIXES = (".heic", ".heif")
+
 
 def _ensure_writable(out_dir: Path) -> None:
     """Prove the destination is writable *before* decoding, not after.
@@ -768,6 +779,122 @@ def find_videos(directory: str | Path) -> list[Path]:
         if path.is_file() and path.suffix.lower() in VIDEO_SUFFIXES
         and not path.name.startswith(".")
     )
+
+
+def find_stills(directory: str | Path) -> tuple[list[Path], list[Path]]:
+    """``(readable stills, ones ffmpeg cannot open)``, in filename order."""
+    directory = Path(directory)
+    if not directory.is_dir():
+        raise NotADirectoryError(directory)
+    files = sorted(
+        path for path in directory.iterdir()
+        if path.is_file() and not path.name.startswith(".")
+    )
+    return (
+        [p for p in files if p.suffix.lower() in STILL_SUFFIXES],
+        [p for p in files if p.suffix.lower() in UNREADABLE_STILL_SUFFIXES],
+    )
+
+
+def group_stills(
+    stills: Sequence[Path], settings: ExtractionSettings | None = None
+) -> list[list[Path]]:
+    """Split photographs into runs sharing one camera position.
+
+    Photographs taken from several angles are several sessions, for exactly the
+    reason a video containing several is: landmarks are annotated once per
+    session and applied to every image in it. Nothing about the input being
+    files rather than frames changes that, so the same measure decides it --
+    consecutive images differing by more than a visit's worth of darts are
+    different viewpoints.
+
+    A change of shape or orientation is a split on its own and needs no
+    measuring: a portrait photograph and a landscape one were not taken from
+    the same position, and their pixels cannot be compared anyway.
+    """
+    settings = settings or ExtractionSettings()
+    if not stills:
+        return []
+
+    from dartvision.capture.framing import _decode as decode_still
+
+    ffmpeg = find_ffmpeg()
+    groups: list[list[Path]] = [[stills[0]]]
+    previous, _ = decode_still(stills[0], settings.analysis_width, ffmpeg)
+
+    for still in stills[1:]:
+        current, _ = decode_still(still, settings.analysis_width, ffmpeg)
+        if current.shape != previous.shape:
+            groups.append([still])
+        else:
+            budget = settings.obstruction_fraction * current.size
+            moved = changed_pixel_count(previous, current, settings.change_level)
+            if moved > budget:
+                groups.append([still])
+            else:
+                groups[-1].append(still)
+        previous = current
+    return groups
+
+
+def collect_stills(
+    directory: str | Path,
+    out_dir: str | Path,
+    settings: ExtractionSettings | None = None,
+    prefix: str = "frame",
+    min_states: int = 2,
+    overwrite: bool = False,
+) -> list[Extraction]:
+    """Sort a folder of photographs into one folder per camera position.
+
+    Copied rather than moved, and renamed into the sequence the annotator
+    expects. The originals are the only copy of a session that cannot be shot
+    again, so nothing here is destructive.
+    """
+    settings = settings or ExtractionSettings()
+    directory, out_dir = Path(directory), Path(out_dir)
+    stills, unreadable = find_stills(directory)
+    if not stills:
+        detail = ""
+        if unreadable:
+            detail = (
+                f" {len(unreadable)} file(s) are HEIC, which ffmpeg cannot read. "
+                "On the iPhone, Settings > Camera > Formats > Most Compatible "
+                "shoots JPEG instead; existing ones export as JPEG from Photos."
+            )
+        raise FileNotFoundError(f"no readable photographs in {directory}.{detail}")
+
+    _ensure_writable(out_dir)
+    name = directory.name.lower() or "stills"
+
+    stale = [
+        path for path in out_dir.iterdir()
+        if path.is_dir() and re.match(rf"^{re.escape(name)}-\d+$", path.name)
+    ] if out_dir.is_dir() else []
+    if stale and not overwrite:
+        raise FileExistsError(
+            f"{out_dir} already holds {len(stale)} folder(s) from an earlier "
+            f"sort of {directory.name}. Pass --overwrite to replace them, or "
+            "--out somewhere new to keep both."
+        )
+    for path in stale:
+        shutil.rmtree(path)
+
+    groups = [g for g in group_stills(stills, settings) if len(g) >= min_states]
+
+    written: list[Extraction] = []
+    for number, group in enumerate(groups, start=1):
+        session = out_dir / f"{name}-{number:02d}"
+        _ensure_writable(session)
+        files = []
+        for position, source in enumerate(group, start=1):
+            destination = session / f"{prefix}-{position:04d}{source.suffix.lower()}"
+            shutil.copy2(source, destination)
+            files.append(destination)
+        written.append(_record(
+            session, len(stills), len(groups), tuple(range(len(group))), 0, 0, files
+        ))
+    return written
 
 
 def extract_folder(

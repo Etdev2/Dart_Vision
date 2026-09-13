@@ -226,6 +226,35 @@ under two landmark sets, which is a corpus problem found long after the effort
 is spent. Pass `--overwrite` to replace that recording's folders, or `--out`
 somewhere new to keep both.
 
+## A folder of photographs
+
+Shot from several angles, the way anyone tries a new setup:
+
+```bash
+./capture --stills ~/Desktop/Darts/T2 --out data/captures/t2
+```
+
+Sorted into one folder per camera position, by the same measure a recording is
+split by, and for the same reason: landmarks are annotated once per folder.
+Nothing about the input being files rather than frames changes that. A change of
+orientation splits on its own — a portrait photograph and a landscape one were
+not taken from the same position. Originals are copied, never moved.
+
+**Photographs are expensive to annotate compared with video.** A folder of one
+shot per angle is eight landmark clicks to gain one image; a video of a visit is
+eight clicks to gain a hundred. Photographs earn their place as *diversity* — a
+deliberately awkward angle, a lighting case, a near-wire dart placed by hand —
+not as bulk.
+
+iPhones shoot HEIC by default and ffmpeg does not read it. Settings > Camera >
+Formats > **Most Compatible** shoots JPEG; existing photographs export as JPEG
+from the Photos app.
+
+Note that `--video-dir` reads one folder and not the ones inside it, and says so
+when it finds videos nested below. Each subfolder is its own run, which is the
+right shape anyway: a folder of trials is a different setup from the one before
+it.
+
 Nothing about this needs the camera to have been set up deliberately, because
 there is no pre-capture calibration step anywhere in this system: the 8 landmarks
 are clicked **afterwards**, on the images, and the board geometry is recovered

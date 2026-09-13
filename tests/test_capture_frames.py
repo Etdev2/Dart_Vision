@@ -200,6 +200,18 @@ def ffmpeg():
     return binary
 
 
+def encode_still(ffmpeg: str, frame: np.ndarray, path) -> None:
+    """Write one frame as a photograph, or skip if this ffmpeg cannot."""
+    result = subprocess.run(
+        [ffmpeg, "-y", "-f", "rawvideo", "-pix_fmt", "gray",
+         "-s", f"{frame.shape[1]}x{frame.shape[0]}", "-i", "-",
+         "-frames:v", "1", str(path)],
+        input=frame.tobytes(), capture_output=True,
+    )
+    if result.returncode != 0 or not path.exists():
+        pytest.skip(f"{ffmpeg} cannot write a test image")
+
+
 def encode(ffmpeg: str, frames: list[np.ndarray], video) -> None:
     """Write a test video, or skip if this ffmpeg cannot.
 
@@ -801,3 +813,98 @@ def test_a_folder_run_proceeds_once_told_to_overwrite(ffmpeg, tmp_path):
     results = extract_folder(source, out, overwrite=True)
 
     assert [path.name for path in results] == ["IMG_0624.mp4"]
+
+
+# --------------------------------------------------------------------------
+# Photographs, which arrive as files rather than frames
+# --------------------------------------------------------------------------
+
+def test_find_stills_separates_what_ffmpeg_cannot_open(tmp_path):
+    """iPhones shoot HEIC by default and ffmpeg does not read it. Reporting a
+    file that plainly is a photograph as 'not a photograph' helps nobody."""
+    from dartvision.capture.frames import find_stills
+
+    for name in ("b.JPG", "a.jpg", "c.png", "d.HEIC", "notes.txt", ".hidden.jpg"):
+        (tmp_path / name).write_bytes(b"")
+
+    readable, unreadable = find_stills(tmp_path)
+
+    assert [p.name for p in readable] == ["a.jpg", "b.JPG", "c.png"]
+    assert [p.name for p in unreadable] == ["d.HEIC"]
+
+
+def test_photographs_from_several_angles_become_several_sessions(ffmpeg, tmp_path):
+    """Landmarks are annotated once per folder, so an angle is a folder —
+    nothing about the input being files rather than frames changes that."""
+    from dartvision.capture.frames import collect_stills
+
+    source = tmp_path / "T2"
+    source.mkdir()
+    for angle, shift in enumerate([0, 70, -65], start=1):
+        for shot in range(2):
+            frame = np.roll(unattended_board(shot, seed=angle * 10 + shot), shift, axis=1)
+            encode_still(ffmpeg, frame, source / f"IMG_{7000 + angle * 10 + shot}.jpg")
+
+    sessions = collect_stills(source, tmp_path / "out")
+
+    assert len(sessions) == 3
+    assert [len(s.files) for s in sessions] == [2, 2, 2]
+    assert [s.files[0].parent.name for s in sessions] == ["t2-01", "t2-02", "t2-03"]
+
+
+def test_sorting_photographs_copies_rather_than_moves(ffmpeg, tmp_path):
+    """The originals are the only copy of a session that cannot be shot again."""
+    from dartvision.capture.frames import collect_stills
+
+    source = tmp_path / "T2"
+    source.mkdir()
+    for shot in range(2):
+        encode_still(ffmpeg, unattended_board(shot, seed=shot), source / f"a{shot}.jpg")
+
+    collect_stills(source, tmp_path / "out")
+
+    assert sorted(p.name for p in source.iterdir()) == ["a0.jpg", "a1.jpg"]
+
+
+def test_a_folder_of_heic_says_what_to_do(tmp_path):
+    from dartvision.capture.frames import collect_stills
+
+    source = tmp_path / "T2"
+    source.mkdir()
+    (source / "IMG_0001.HEIC").write_bytes(b"")
+
+    with pytest.raises(FileNotFoundError, match="Most Compatible"):
+        collect_stills(source, tmp_path / "out")
+
+
+def test_a_change_of_orientation_splits_without_measuring(ffmpeg, tmp_path):
+    """A portrait photograph and a landscape one were not taken from the same
+    position, and their pixels cannot be compared anyway."""
+    from dartvision.capture.frames import collect_stills
+
+    source = tmp_path / "T2"
+    source.mkdir()
+    for shot in range(2):
+        encode_still(ffmpeg, unattended_board(shot, seed=shot), source / f"a{shot}.jpg")
+    for shot in range(2):
+        turned = np.rot90(unattended_board(shot, seed=50 + shot))
+        encode_still(ffmpeg, np.ascontiguousarray(turned), source / f"b{shot}.jpg")
+
+    sessions = collect_stills(source, tmp_path / "out")
+
+    assert len(sessions) == 2
+
+
+def test_re_sorting_photographs_is_refused_then_allowed(ffmpeg, tmp_path):
+    from dartvision.capture.frames import collect_stills
+
+    source = tmp_path / "T2"
+    source.mkdir()
+    for shot in range(2):
+        encode_still(ffmpeg, unattended_board(shot, seed=shot), source / f"a{shot}.jpg")
+    out = tmp_path / "out"
+    collect_stills(source, out)
+
+    with pytest.raises(FileExistsError, match="earlier sort"):
+        collect_stills(source, out)
+    assert len(collect_stills(source, out, overwrite=True)) == 1
