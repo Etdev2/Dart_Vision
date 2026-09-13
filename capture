@@ -1,0 +1,48 @@
+#!/bin/sh
+# Pull stills out of recorded sessions, without needing the virtualenv active.
+#
+#   ./capture --video-dir ~/Desktop/Darts --out data/captures/garage
+#   ./capture --video ~/Desktop/Darts/IMG_0625.MOV --diagnose
+#
+# Capture happens away from the keyboard, and the tool then gets run from
+# whichever Terminal window is open -- which is rarely one with .venv
+# activated. What that produces is `No module named 'dartvision'` from the
+# system python, an error about an environment rather than about anything the
+# user did, and one that says nothing about the fix. The environment is this
+# script's problem, not theirs.
+#
+# Everything after the script name is passed straight through, so this is the
+# documented module invocation with the setup already done.
+set -e
+
+# Absolute paths to the environment, and no `cd` into the repository. Changing
+# directory would silently re-root every relative path in the arguments: run
+# from a recordings folder, `--out captures/` would land inside the checkout
+# rather than where it was asked for. Invoking the virtualenv's own interpreter
+# puts a process in that environment just as activating it would.
+root="$(cd "$(dirname "$0")" && pwd)"
+python="$root/.venv/bin/python"
+
+if [ ! -x "$python" ]; then
+    echo "creating .venv (first run only)" >&2
+    python3 -m venv "$root/.venv"
+fi
+
+if ! "$python" -c 'import dartvision.capture' 2>/dev/null; then
+    echo "installing dartvision into .venv (first run only)" >&2
+    "$root/.venv/bin/pip" install -q -e "$root[dev]"
+fi
+
+# Checked again, and against what actually gets imported rather than the
+# top-level package. pip can report success having installed this package but
+# not something it depends on -- no network reaching PyPI, most often -- and
+# the failure then surfaces as a traceback out of numpy, which reads like a bug
+# in the tool rather than an interrupted setup.
+if ! "$python" -c 'import dartvision.capture' 2>/dev/null; then
+    echo "dartvision is still not importable after installing it." >&2
+    echo "Most likely the install could not reach the network. Try:" >&2
+    echo "    $root/.venv/bin/pip install -e '$root[dev]'" >&2
+    exit 1
+fi
+
+exec "$python" -m dartvision.capture "$@"

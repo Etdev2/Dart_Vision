@@ -135,10 +135,17 @@ Three settings matter, and the first will ruin a session silently:
 Then **throw, pause about two seconds, throw**. The pause is what the extractor
 looks for.
 
+All the commands below are written as `./capture`, a wrapper in the repository
+root that finds the virtualenv for you. Capture happens away from the keyboard
+and the tool gets run from whichever Terminal window is open, which is rarely
+one with `.venv` activated; the wrapper makes that the script's problem rather
+than yours, creating and populating the environment on first run. `python -m
+dartvision.capture` with the environment active does exactly the same thing.
+
 Scan the first video before committing a session to it:
 
 ```bash
-python -m dartvision.capture --video session.mp4 --diagnose
+./capture --video session.mov --diagnose
 ```
 
 That writes nothing. It reports how much changed between frames, how many times
@@ -149,7 +156,7 @@ whole visits are collapsing into one still; far more means noise is reading as a
 dart. Then run it for real:
 
 ```bash
-python -m dartvision.capture --video session.mov --out data/captures/garage
+./capture --video session.mov --out data/captures/garage
 ```
 
 It keeps one still per board state — the empty board, then each dart as it
@@ -175,7 +182,7 @@ with `--min-states` if you disagree.
 Footage shot before any of this existed is still usable. Point it at the folder:
 
 ```bash
-python -m dartvision.capture --video-dir ~/Desktop/Darts --out data/captures/garage
+./capture --video-dir ~/Desktop/Darts --out data/captures/garage
 ```
 
 Every video in the folder is read in filename order — which for phone footage is

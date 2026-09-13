@@ -10,6 +10,21 @@ tells you whether to continue.
 git clone https://github.com/Etdev2/Dart_Vision.git && cd Dart_Vision
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
+```
+
+Pulling stills out of recordings needs none of that. `./capture` in the
+repository root creates and populates the environment on its first run and
+passes everything through to `python -m dartvision.capture`, because capture
+happens away from the keyboard and gets run from whichever Terminal window is
+open — rarely one with `.venv` activated.
+
+```bash
+./capture --video-dir ~/Desktop/Darts --out data/captures/garage
+```
+
+With the environment active, the first thing worth running is:
+
+```bash
 python -m dartvision.doctor
 ```
 
