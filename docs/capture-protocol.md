@@ -209,12 +209,21 @@ be large — you walking to the board is movement, twice a visit. It costs a
 second of footage each time and nothing else. Only a view that does not come
 back is a session boundary.
 
-One limit worth knowing: the viewpoint check finds a phone that was picked up
-and put down, not a phone that was knocked. A shift of a few pixels moves about
-as many pixels as pulling three darts does, and separating those needs the board
-located, which is the model's job rather than the extractor's. Lock the mount —
-and if it slipped anyway, the annotator shows it, because the session's single
-landmark set stops sitting on the board.
+The split asks whether the view *came back*, not how big the change was. Pulling
+darts returns the board to how it looked at the start of the visit; a camera
+moved somewhere new resembles nothing seen before. That distinction matters more
+the better the framing gets: the threshold is a share of the frame and a dart is
+a share of the board, so filling the frame properly walks a visit's worth of
+darts towards a line meant to sit far above them. Measured on a real session,
+clearing a closely framed board cleared that line by 1.17x, where a phone
+actually picked up cleared it by 11x.
+
+One limit worth knowing: the check finds a phone that was picked up and put
+down, not a phone that was knocked. A shift of a few pixels changes too little
+to tell from a dart, and separating those needs the board located, which is the
+model's job rather than the extractor's. Lock the mount — and if it slipped
+anyway, the annotator shows it, because the session's single landmark set stops
+sitting on the board.
 
 Long recordings are the expected case, so the video is scanned at 5 frames a
 second rather than its own rate: a pause of a second still spans five frames,

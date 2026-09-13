@@ -94,6 +94,13 @@ ANALYSIS_WIDTH = 192
 # frames.
 ANALYSIS_FPS = 5.0
 
+# How many earlier board states a jump is checked against before it counts as a
+# camera move. A cleared board resembles the empty board from the start of the
+# same visit, four states back, so a handful is plenty -- and the comparison is
+# over whole frames, which makes an unbounded search quadratic in the length of
+# a session for no gain past the visit in progress.
+RETURN_LOOKBACK = 12
+
 
 @dataclass(frozen=True)
 class ExtractionSettings:
@@ -392,15 +399,43 @@ def viewpoint_splits(
         return []
 
     budget = settings.obstruction_fraction * np.asarray(frames[0]).size
+    level = settings.change_level
+
     found: list[tuple[list[int], float]] = [([kept[0]], 0.0)]
     for previous, index in zip(kept, kept[1:]):
-        moved = changed_pixel_count(
-            frames[previous], frames[index], settings.change_level
-        )
-        if moved > budget:
-            found.append(([index], moved / budget))
-        else:
+        moved = changed_pixel_count(frames[previous], frames[index], level)
+        if moved <= budget:
             found[-1][0].append(index)
+            continue
+
+        # A jump past the line, which size alone cannot explain. The line is a
+        # share of the *frame* and a dart is a share of the *board*, so framing
+        # the board larger -- what the precision budget asks for -- walks a
+        # visit's worth of darts towards a line meant to sit far above them.
+        # Measured on a real session that put every one of twenty splits
+        # between 1.0x and 1.3x the line, where a phone actually picked up
+        # measured 11x.
+        #
+        # What separates them is not size but whether the view came *back*.
+        # Pulling darts returns the board to how it looked at the start of the
+        # visit; a camera moved somewhere new resembles nothing seen before.
+        # So a big jump that lands on a state this viewpoint already held is a
+        # board being cleared, and one that lands somewhere unrecognised is the
+        # camera. A camera moved back to a previous position matches too, and
+        # should: that is the same viewpoint returning, which is what the
+        # session boundary is actually asking about.
+        # Spelled with the guard because `x[-0:]` is the whole list rather than
+        # none of it, so a lookback of zero would silently mean *unlimited* --
+        # the opposite of what the number says, and quadratic besides.
+        recent = found[-1][0][-RETURN_LOOKBACK:] if RETURN_LOOKBACK else []
+        returned = any(
+            changed_pixel_count(frames[earlier], frames[index], level) <= budget
+            for earlier in recent
+        )
+        if returned:
+            found[-1][0].append(index)
+        else:
+            found.append(([index], moved / budget))
     return found
 
 

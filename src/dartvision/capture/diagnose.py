@@ -248,12 +248,12 @@ def render(
         lines += [
             "one viewpoint throughout — the whole recording is a single "
             "session, which is what you want",
-            "  This catches the phone being repositioned, not a nudge: a small "
-            "shift moves about as many",
-            "  pixels as pulling three darts does, and separating those needs "
-            "the board located, which is",
-            "  the model's job. Lock the mount; the annotator will show "
-            "landmarks drifting if it slipped.",
+            "  This catches the phone being repositioned, not a nudge. A shift "
+            "of a few pixels changes too",
+            "  little to tell from a dart, and separating those needs the board "
+            "located, which is the model's",
+            "  job. Lock the mount; the annotator will show landmarks drifting "
+            "if it slipped anyway.",
         ]
     else:
         usable = [view for view in views if view.states >= 2]

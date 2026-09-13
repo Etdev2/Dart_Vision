@@ -9,6 +9,7 @@ exactly the part that unit tests cannot vouch for.
 from __future__ import annotations
 
 import pathlib
+from pathlib import Path
 import subprocess
 
 import numpy as np
@@ -571,3 +572,107 @@ def test_a_folder_with_nothing_readable_raises(ffmpeg, tmp_path):
 
     with pytest.raises(RuntimeError, match="no video could be read"):
         extract_folder(source, tmp_path / "out")
+
+
+# --------------------------------------------------------------------------
+# The board framed properly, which is where the viewpoint rule got it wrong
+# --------------------------------------------------------------------------
+
+def closely_framed(darts: int = 0, seed: int = 0) -> np.ndarray:
+    """A board filling enough of the frame that a visit's darts are big.
+
+    The framing the precision budget asks for, and the framing that broke the
+    viewpoint rule: three darts here cover more of the frame than the line that
+    splits a session, so clearing them looked exactly like the camera moving.
+    Measured on a real 12-minute recording that split into twenty viewpoints,
+    every one of them between 1.0x and 1.3x the line.
+    """
+    height, width = 341, 192
+    rng = np.random.default_rng(seed)
+    frame = np.full((height, width), 225.0)
+    centre_y, centre_x, radius = 150, 96, 88
+    ys, xs = np.ogrid[:height, :width]
+    frame[(ys - centre_y) ** 2 + (xs - centre_x) ** 2 <= radius ** 2] = 55.0
+    for index in range(darts):
+        y, x = centre_y - 40 + index * 26, centre_x - 30 + index * 24
+        frame[y:y + 64, x:x + 20] = 245.0        # ~1280 px apiece
+    return np.clip(frame + rng.normal(0, 1.2, frame.shape), 0, 255).astype(np.uint8)
+
+
+def closely_framed_visits(visits: int = 3) -> list[np.ndarray]:
+    """Several visits from one fixed camera: fill the board, clear it, repeat."""
+    frames: list[np.ndarray] = []
+    seed = 0
+    for visit in range(visits):
+        for darts in range(4):
+            seed += 1
+            frames.append(closely_framed(max(darts - 1, 0), seed=900 + seed))
+            frames += [closely_framed(darts, seed=seed * 20 + i) for i in range(10)]
+        seed += 1
+        frames += [closely_framed(0, seed=5000 + seed * 10 + i) for i in range(10)]
+    return frames
+
+
+def test_clearing_the_board_exceeds_the_line_when_framed_closely():
+    """The measurement behind the rule change, asserted so it cannot drift."""
+    from dartvision.capture.frames import changed_pixel_count
+
+    settings = ExtractionSettings()
+    full, empty = closely_framed(3, seed=1), closely_framed(0, seed=2)
+    budget = settings.obstruction_fraction * full.size
+    jump = changed_pixel_count(full, empty, settings.change_level)
+
+    assert jump > budget, "pulling three darts must clear the line"
+    assert jump < 2 * budget, (
+        "and only barely — which is exactly what made it indistinguishable "
+        "from a camera move by size alone"
+    )
+
+
+def test_pulling_darts_is_not_a_camera_move_however_big_they_are():
+    """IMG_0632: twelve minutes from one fixed phone that came back as twenty
+    sessions. The board returning to how it looked at the start of the visit is
+    a board being cleared, not a camera pointing somewhere new."""
+    from dartvision.capture.frames import viewpoint_groups
+
+    frames = closely_framed_visits()
+    kept, _, _, _ = choose_frames(frames)
+    groups = viewpoint_groups(frames, kept)
+
+    assert len(groups) == 1, (
+        f"one fixed camera throughout, got {len(groups)} viewpoints"
+    )
+
+
+def test_the_old_size_only_rule_would_have_split_it(monkeypatch):
+    """Guards the fix: stop looking for the view coming back and the twenty
+    spurious sessions return."""
+    from dartvision.capture import frames as module
+
+    monkeypatch.setattr(module, "RETURN_LOOKBACK", 0)
+    frames = closely_framed_visits()
+    kept, _, _, _ = choose_frames(frames)
+
+    assert len(module.viewpoint_groups(frames, kept)) > 1
+
+
+def test_a_real_move_still_splits_a_closely_framed_recording():
+    """The rule must not have been softened into never splitting anything."""
+    from dartvision.capture.frames import viewpoint_groups
+
+    before = closely_framed_visits(visits=2)
+    after = [np.roll(frame, 60, axis=1) for frame in closely_framed_visits(visits=2)]
+    frames = before + after
+
+    kept, _, _, _ = choose_frames(frames)
+    groups = viewpoint_groups(frames, kept)
+
+    assert len(groups) == 2, f"a phone moved somewhere new, got {len(groups)}"
+
+
+def test_a_zero_lookback_means_none_rather_than_all():
+    """`x[-0:]` is the whole list, not an empty one, so the bound has to be
+    spelled with a guard or the number means the opposite of what it says."""
+    from dartvision.capture import frames as module
+
+    assert "if RETURN_LOOKBACK else []" in Path(module.__file__).read_text()
