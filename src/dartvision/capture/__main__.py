@@ -141,6 +141,53 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
 
+def _report_many(sessions: list[Path]) -> int:
+    """One line per session folder, worst first.
+
+    With a corpus in the dozens the question stops being "is this one good" and
+    becomes "which of these are worth the clicks", and that is a table rather
+    than a paragraph.
+    """
+    from dartvision.capture.framing import measure_image
+    from dartvision.model.spec import MIN_RING_PX
+
+    rows = []
+    for session in sessions:
+        stills = sorted(session.glob("*.jpg"))
+        sample = [s for s in stills if s.name != "framing-check.jpg"][:3]
+        if not sample:
+            continue
+        measured = [measure_image(still) for still in sample]
+        # Ranked on the squared-up figure: the best a folder can do without
+        # being re-shot, which is what deciding whether to annotate it turns
+        # on. The as-shot number is worse for every portrait recording and
+        # improving it is a change to the training pipeline, not to the folder.
+        squared = sum(m.ring_squared for m in measured) / len(measured)
+        rows.append((squared, session.name, len(stills), measured[0].fills,
+                     any(m.suspect for m in measured)))
+
+    rows.sort(reverse=True)
+    print(f"{len(rows)} session folder(s), best framing first. The ring needs "
+          f"{MIN_RING_PX:.0f} px.\n")
+    print(f"  {'folder':<22}{'stills':>7}{'board':>8}{'ring, squared up':>19}")
+    for best, name, count, fills, suspect in rows:
+        flag = " ?" if suspect else ""
+        print(f"  {name:<22}{count:>7}{100 * fills:>7.0f}%{best:>16.1f} px{flag}")
+
+    clear = [r for r in rows if r[0] >= MIN_RING_PX]
+    print()
+    if clear:
+        total = sum(r[2] for r in clear)
+        print(f"  {len(clear)} folder(s) clear the floor, {total} stills between "
+              "them. Annotate those first.")
+    else:
+        print("  None clear the floor. The best is the one to re-shoot closer, "
+              "not to annotate.")
+    print("  ? marks a region the wrong shape to be a board — measured by its "
+          "shorter side, so read it as a lower bound.")
+    return 0
+
+
 def _report_framing(target: Path, board_width: int | None = None) -> int:
     """What the double ring will be worth at the model's input.
 
@@ -154,7 +201,21 @@ def _report_framing(target: Path, board_width: int | None = None) -> int:
     if target.is_dir():
         stills = sorted(target.glob("*.jpg"))[:5]
         if not stills:
-            raise FileNotFoundError(f"no .jpg stills in {target}")
+            # A parent directory of session folders rather than a session.
+            # Reporting every one in a run is what answers the question people
+            # actually have with a corpus this size -- which of these are worth
+            # annotating -- and a folder of folders is how that corpus is
+            # arranged, so it is the likelier thing to have been pointed at.
+            sessions = sorted(
+                path for path in target.iterdir()
+                if path.is_dir() and any(path.glob("*.jpg"))
+            )
+            if sessions:
+                return _report_many(sessions)
+            raise FileNotFoundError(
+                f"no .jpg stills in {target}, and no session folders under it "
+                "holding any either"
+            )
     else:
         stills = [target]
 

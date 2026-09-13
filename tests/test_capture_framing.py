@@ -330,3 +330,75 @@ def test_a_segmented_board_measures_true_at_several_sizes(diameter, tmp_path):
     measured = measure_image(image)
 
     assert abs(measured.board[0] - diameter) / diameter < 0.10
+
+
+# --------------------------------------------------------------------------
+# A corpus of folders, rather than one of them
+# --------------------------------------------------------------------------
+
+def test_a_parent_of_session_folders_reports_every_one(tmp_path, capsys):
+    """With a corpus in the dozens the question stops being "is this one good"
+    and becomes "which of these are worth the clicks"."""
+    from dartvision.capture import __main__ as cli
+
+    for name, diameter in (("near-01", 900), ("far-01", 380), ("mid-01", 600)):
+        folder = tmp_path / name
+        folder.mkdir()
+        write(dartboard_room(diameter, centre=(900, 540)), folder / "frame-0001.jpg")
+
+    assert cli.main(["--framing", str(tmp_path)]) == 0
+    printed = capsys.readouterr().out
+
+    assert "3 session folder(s)" in printed
+    order = [printed.index(name) for name in ("near-01", "mid-01", "far-01")]
+    assert order == sorted(order), "best framing first, so the top line is the pick"
+
+
+def test_the_corpus_report_says_which_folders_clear_the_floor(tmp_path, capsys):
+    from dartvision.capture import __main__ as cli
+
+    for name, diameter in (("good-01", 950), ("poor-01", 360)):
+        folder = tmp_path / name
+        folder.mkdir()
+        for index in range(2):
+            write(dartboard_room(diameter, centre=(900, 540)),
+                  folder / f"frame-{index:04d}.jpg")
+
+    cli.main(["--framing", str(tmp_path)])
+    printed = capsys.readouterr().out
+
+    assert "1 folder(s) clear the floor, 2 stills between them" in printed
+
+
+def test_a_corpus_where_nothing_clears_says_to_re_shoot(tmp_path, capsys):
+    from dartvision.capture import __main__ as cli
+
+    folder = tmp_path / "poor-01"
+    folder.mkdir()
+    write(dartboard_room(360, centre=(900, 540)), folder / "frame-0001.jpg")
+
+    cli.main(["--framing", str(tmp_path)])
+
+    assert "None clear the floor" in capsys.readouterr().out
+
+
+def test_a_folder_holding_neither_stills_nor_sessions_says_so(tmp_path, capsys):
+    from dartvision.capture import __main__ as cli
+
+    assert cli.main(["--framing", str(tmp_path)]) == 1
+    assert "no session folders under it" in capsys.readouterr().out
+
+
+def test_the_check_image_is_not_counted_as_a_still(tmp_path, capsys):
+    """framing-check.jpg is written beside the stills by an earlier run, and
+    measuring the tool's own output back would be a nonsense."""
+    from dartvision.capture import __main__ as cli
+
+    folder = tmp_path / "one-01"
+    folder.mkdir()
+    write(dartboard_room(600, centre=(900, 540)), folder / "frame-0001.jpg")
+    write(dartboard_room(600, centre=(900, 540)), folder / "framing-check.jpg")
+
+    cli.main(["--framing", str(tmp_path)])
+
+    assert "one-01" in capsys.readouterr().out
