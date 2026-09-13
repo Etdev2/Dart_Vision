@@ -432,3 +432,142 @@ def test_a_camera_move_is_not_mistaken_for_an_obstruction():
 def test_an_impossible_obstruction_fraction_is_refused(value):
     with pytest.raises(ValueError):
         ExtractionSettings(obstruction_fraction=value)
+
+
+# --------------------------------------------------------------------------
+# Footage that was not shot to a protocol
+# --------------------------------------------------------------------------
+
+def moved_visit() -> list[np.ndarray]:
+    """Two camera positions in one recording: the phone was picked up."""
+    def shifted(darts, seed):
+        return np.roll(unattended_board(darts, seed=seed), 70, axis=1)
+
+    return (
+        [unattended_board(1, seed=i) for i in range(10)]
+        + [unattended_board(2, seed=40 + i) for i in range(10)]
+        + [shifted(0, seed=500 + i) for i in range(10)]
+        + [shifted(1, seed=600 + i) for i in range(10)]
+        + [shifted(2, seed=700 + i) for i in range(10)]
+    )
+
+
+def test_viewpoint_groups_split_where_the_camera_moved():
+    from dartvision.capture.frames import viewpoint_groups
+
+    frames = moved_visit()
+    kept, _, _, _ = choose_frames(frames)
+    groups = viewpoint_groups(frames, kept)
+
+    assert [len(group) for group in groups] == [2, 3]
+    assert groups[0][-1] < groups[1][0]
+
+
+def test_a_steady_recording_is_one_group():
+    from dartvision.capture.frames import viewpoint_groups
+
+    frames = unattended_visit()
+    kept, _, _, _ = choose_frames(frames)
+
+    assert len(viewpoint_groups(frames, kept)) == 1
+
+
+def test_grouping_an_empty_extraction_is_not_an_error():
+    from dartvision.capture.frames import viewpoint_groups
+
+    assert viewpoint_groups(unattended_visit(), []) == []
+
+
+def test_find_videos_ignores_everything_that_is_not_one(tmp_path):
+    from dartvision.capture.frames import find_videos
+
+    for name in ("IMG_0625.MOV", "IMG_0624.mp4", "notes.txt", ".DS_Store",
+                 "._IMG_0624.mp4"):
+        (tmp_path / name).write_bytes(b"")
+    (tmp_path / "subfolder").mkdir()
+
+    found = find_videos(tmp_path)
+
+    assert [path.name for path in found] == ["IMG_0624.mp4", "IMG_0625.MOV"], (
+        "filename order, which for phone footage is the order they were shot in"
+    )
+
+
+def test_find_videos_needs_a_directory(tmp_path):
+    from dartvision.capture.frames import find_videos
+
+    video = tmp_path / "one.mp4"
+    video.write_bytes(b"")
+    with pytest.raises(NotADirectoryError):
+        find_videos(video)
+
+
+def test_a_moved_camera_becomes_two_session_folders(ffmpeg, tmp_path):
+    """The question this answers: footage shot without a protocol, where the
+    phone was picked up partway. Splitting is not tidiness — landmarks are
+    annotated once per folder, so a shared folder mislabels one position."""
+    from dartvision.capture.frames import extract_sessions
+
+    video = tmp_path / "IMG_0624.mp4"
+    encode(ffmpeg, moved_visit(), video)
+    sessions = extract_sessions(video, tmp_path / "out")
+
+    assert len(sessions) == 2
+    folders = [session.files[0].parent.name for session in sessions]
+    assert folders == ["img_0624-01", "img_0624-02"]
+    for session in sessions:
+        assert (session.files[0].parent / "extraction.json").exists()
+        assert len(session.files) >= 2
+
+
+def test_a_viewpoint_too_small_to_annotate_is_dropped(ffmpeg, tmp_path):
+    """Eight landmark clicks to gain one image is not a trade worth making."""
+    from dartvision.capture.frames import extract_sessions
+
+    video = tmp_path / "IMG_0624.mp4"
+    encode(ffmpeg, moved_visit(), video)
+
+    assert len(extract_sessions(video, tmp_path / "a", min_states=3)) == 1
+    assert len(extract_sessions(video, tmp_path / "b", min_states=1)) == 2
+
+
+def test_a_folder_of_recordings_is_read_in_order(ffmpeg, tmp_path):
+    from dartvision.capture.frames import extract_folder
+
+    source = tmp_path / "Darts"
+    source.mkdir()
+    for name in ("IMG_0624.mp4", "IMG_0625.mp4"):
+        encode(ffmpeg, unattended_visit(), source / name)
+    (source / "notes.txt").write_text("not a video")
+
+    results = extract_folder(source, tmp_path / "out")
+
+    assert [path.name for path in results] == ["IMG_0624.mp4", "IMG_0625.mp4"]
+    assert all(len(sessions) == 1 for sessions in results.values())
+
+
+def test_one_unreadable_video_does_not_lose_the_rest(ffmpeg, tmp_path, capsys):
+    """A folder of phone footage reliably contains something ffmpeg dislikes,
+    and losing an hour of decoding to the last file would be a poor trade."""
+    from dartvision.capture.frames import extract_folder
+
+    source = tmp_path / "Darts"
+    source.mkdir()
+    encode(ffmpeg, unattended_visit(), source / "IMG_0624.mp4")
+    (source / "IMG_0625.mp4").write_bytes(b"not actually a video")
+
+    results = extract_folder(source, tmp_path / "out")
+
+    assert [path.name for path in results] == ["IMG_0624.mp4"]
+    assert "IMG_0625" in capsys.readouterr().out
+
+
+def test_a_folder_with_nothing_readable_raises(ffmpeg, tmp_path):
+    from dartvision.capture.frames import extract_folder
+
+    source = tmp_path / "Darts"
+    source.mkdir()
+    (source / "IMG_0625.mp4").write_bytes(b"not actually a video")
+
+    with pytest.raises(RuntimeError, match="no video could be read"):
+        extract_folder(source, tmp_path / "out")

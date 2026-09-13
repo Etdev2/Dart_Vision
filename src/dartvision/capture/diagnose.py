@@ -25,10 +25,10 @@ import numpy as np
 from dartvision.capture.frames import (
     ExtractionSettings,
     _analysis_frames,
-    changed_pixel_count,
     choose_frames,
     find_ffmpeg,
     frame_statistics,
+    viewpoint_groups,
 )
 
 __all__ = [
@@ -122,27 +122,10 @@ def viewpoints(
     dart needs the board *located*, which is the model's job and not this one's.
     """
     kept, _, _, _ = choose_frames(frames, settings)
-    if not kept:
-        return []
-
-    budget = settings.obstruction_fraction * np.asarray(frames[0]).size
-    bounds = [
-        index
-        for previous, index in zip(kept, kept[1:])
-        if changed_pixel_count(frames[previous], frames[index],
-                               settings.change_level) > budget
+    return [
+        Viewpoint(group[0] / fps, group[-1] / fps, len(group))
+        for group in viewpoint_groups(frames, kept, settings)
     ]
-
-    found: list[Viewpoint] = []
-    segment: list[int] = []
-    for index in kept:
-        if index in bounds and segment:
-            found.append(Viewpoint(segment[0] / fps, segment[-1] / fps, len(segment)))
-            segment = []
-        segment.append(index)
-    if segment:
-        found.append(Viewpoint(segment[0] / fps, segment[-1] / fps, len(segment)))
-    return found
 
 
 def scan(frames: Sequence[np.ndarray], settings: ExtractionSettings) -> Scan:
@@ -262,16 +245,18 @@ def render(
             "landmarks drifting if it slipped.",
         ]
     else:
+        usable = [view for view in views if view.states >= 2]
         lines += [f"{len(views)} viewpoints — the camera moved {len(views) - 1} "
-                  f"time(s), so this recording is {len(views)} sessions:"]
+                  f"time(s), so this recording is {len(usable)} session(s):"]
         for number, view in enumerate(views, start=1):
+            note = "" if view.states >= 2 else "   (dropped: too small to annotate)"
             lines.append(f"  {number:>2}. {view.clock():>15}   "
-                         f"{view.states:>3} board states")
+                         f"{view.states:>3} board states{note}")
         lines += [
-            "  Landmarks are annotated once per session. Extract each stretch "
-            "to its own folder with",
-            "  --out .../session-01, -02 and so on, or the labels after the "
-            "first move are simply wrong.",
+            "  Extraction splits these into their own folders on its own — "
+            "landmarks are annotated once",
+            "  per folder, so this is not a preference. Nothing to do but run "
+            "it.",
         ]
 
     lines += ["", "what other settings would have given", "",

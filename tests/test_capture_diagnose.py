@@ -197,4 +197,5 @@ def test_the_report_names_the_sessions_when_the_camera_moved():
     text = render(measured, sweep(frames, SETTINGS), SETTINGS,
                   viewpoints(frames, SETTINGS, SETTINGS.analysis_fps))
 
-    assert "2 viewpoints" in text and "2 sessions" in text
+    assert "2 viewpoints" in text and "2 session(s)" in text
+    assert "the camera moved 1 time(s)" in text

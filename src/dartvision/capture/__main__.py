@@ -1,4 +1,16 @@
-"""``python -m dartvision.capture --video session.mp4 --out frames/``"""
+"""Turning recorded video into labelled-ready stills.
+
+    python -m dartvision.capture --video session.mov --out data/captures/garage
+    python -m dartvision.capture --video-dir ~/Desktop/Darts --out data/captures/garage
+    python -m dartvision.capture --video session.mov --diagnose
+
+Output is always one folder per camera position, never one folder per video.
+Landmarks are annotated once per folder and applied to everything in it, so two
+camera positions sharing a folder means one of them is labelled against a
+viewpoint it was never shot from -- silently, and in every frame. Recordings
+made without a protocol routinely hold several positions, so the safe
+arrangement is the only one offered rather than a flag to remember.
+"""
 
 from __future__ import annotations
 
@@ -6,17 +18,39 @@ import argparse
 from pathlib import Path
 
 from dartvision.capture.diagnose import render, scan_video, sweep, viewpoints
-from dartvision.capture.frames import ExtractionSettings, extract
+from dartvision.capture.frames import (
+    Extraction,
+    ExtractionSettings,
+    extract_folder,
+    extract_sessions,
+    find_videos,
+)
 
 
-def main(argv: list[str] | None = None) -> int:
+def _clock(seconds: float) -> str:
+    return f"{int(seconds) // 60}:{seconds % 60:04.1f}"
+
+
+def _describe(sessions: list[Extraction], fps: float) -> list[str]:
+    lines = []
+    for session in sessions:
+        folder = session.files[0].parent.name if session.files else "?"
+        span = (f"{_clock(session.kept[0] / fps)}-{_clock(session.kept[-1] / fps)}"
+                if session.kept else "-")
+        lines.append(f"    {folder:<20} {span:>15}   {len(session.files):>3} stills")
+    return lines
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Pull one still per board state out of a recorded session",
+        prog="python -m dartvision.capture",
+        description="Pull one still per board state out of recorded sessions",
     )
-    parser.add_argument("--video", required=True)
-    parser.add_argument(
-        "--out", help="directory for the stills; not needed with --diagnose",
-    )
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--video", help="one recording")
+    source.add_argument("--video-dir", help="a folder of recordings")
+
+    parser.add_argument("--out", help="parent directory; not needed with --diagnose")
     parser.add_argument(
         "--diagnose", action="store_true",
         help="report what the video looks like and what each setting would keep, "
@@ -44,12 +78,22 @@ def main(argv: list[str] | None = None) -> int:
         "--obstruction-fraction", type=float,
         default=ExtractionSettings.obstruction_fraction,
         help="share of the frame that must change before a difference is a body "
-             "in the way rather than a dart",
+             "in the way, or the camera moving, rather than a dart",
     )
     parser.add_argument(
         "--changed-pixels", type=int, default=ExtractionSettings.changed_pixels,
         help="pixels that must change before two stills count as different states",
     )
+    parser.add_argument(
+        "--min-states", type=int, default=2,
+        help="viewpoints yielding fewer stills than this are dropped; eight "
+             "landmark clicks to gain one image is not a trade worth making",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     settings = ExtractionSettings(
@@ -62,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.diagnose:
+        if not args.video:
+            parser.error("--diagnose reads one video; pass --video")
         measured, frames = scan_video(args.video, settings)
         views = viewpoints(frames, settings, measured.fps)
         print(render(measured, sweep(frames, settings), settings, views))
@@ -70,18 +116,37 @@ def main(argv: list[str] | None = None) -> int:
     if not args.out:
         parser.error("--out is required unless you pass --diagnose")
 
-    result = extract(args.video, args.out, settings, prefix=args.prefix)
+    if args.video:
+        found = {Path(args.video): extract_sessions(
+            args.video, args.out, settings, args.prefix, args.min_states
+        )}
+    else:
+        videos = find_videos(args.video_dir)
+        if not videos:
+            print(f"no videos in {args.video_dir}")
+            return 1
+        print(f"reading {len(videos)} video(s) from {args.video_dir}\n")
+        found = extract_folder(
+            args.video_dir, args.out, settings, args.prefix, args.min_states
+        )
 
-    minutes = result.frames_read / max(args.analysis_fps, 1e-9) / 60
-    print(f"scanned {result.frames_read} frames (~{minutes:.1f} minutes of video)")
-    print(f"found {result.still_runs} still runs")
-    print(f"dropped {result.dropped_as_duplicate} as the same board state")
-    print(f"dropped {result.dropped_as_obstructed} as something in front of the board")
-    print(f"kept {len(result.files)} stills in {Path(args.out)}")
-    if not result.files:
-        print("\nNothing kept. Either the camera never settled or a threshold is "
-              "too tight for this footage.\nRun the same command with --diagnose "
-              "instead of --out to see which.")
+    stills = 0
+    sessions = 0
+    for video, produced in found.items():
+        read = produced[0].frames_read if produced else 0
+        minutes = read / max(args.analysis_fps, 1e-9) / 60
+        print(f"  {video.name} — {read} frames (~{minutes:.1f} min), "
+              f"{len(produced)} camera position(s)")
+        print("\n".join(_describe(produced, args.analysis_fps)))
+        stills += sum(len(s.files) for s in produced)
+        sessions += len(produced)
+
+    print(f"\n{stills} stills across {sessions} session folder(s) in {args.out}")
+    if not stills:
+        print("\nNothing kept. Run the same command with --diagnose instead of "
+              "--out to see why.")
+        return 1
+    print("Annotate each folder separately — its landmarks are its own.")
     return 0
 
 

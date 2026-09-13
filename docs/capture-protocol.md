@@ -149,7 +149,7 @@ whole visits are collapsing into one still; far more means noise is reading as a
 dart. Then run it for real:
 
 ```bash
-python -m dartvision.capture --video session.mp4 --out data/captures/garage/session-01
+python -m dartvision.capture --video session.mov --out data/captures/garage
 ```
 
 It keeps one still per board state — the empty board, then each dart as it
@@ -157,6 +157,38 @@ lands — by finding runs of frames where nothing moves, taking the sharpest
 frame of each run, dropping runs that are a body standing at the board, and
 dropping runs where nothing actually landed. Four frames a visit, 75 visits,
 300 images: the same target, without 300 shutter presses.
+
+`--out` names a **parent** directory, not a session folder. Output goes to one
+subfolder per camera position — `garage/img_0624-01`, `garage/img_0624-02` —
+because landmarks are annotated once per folder and applied to everything in it.
+Two camera positions sharing a folder means one of them is labelled against a
+viewpoint it was never shot from, in every frame, with nothing downstream to
+flag it. That is why the split is automatic rather than a flag to remember.
+
+A viewpoint yielding fewer than two stills is dropped: eight landmark clicks to
+gain one image is not a trade worth making, and a one-state viewpoint is usually
+the instant *during* a move rather than a position anybody threw from. Change it
+with `--min-states` if you disagree.
+
+## A folder of recordings made without a protocol
+
+Footage shot before any of this existed is still usable. Point it at the folder:
+
+```bash
+python -m dartvision.capture --video-dir ~/Desktop/Darts --out data/captures/garage
+```
+
+Every video in the folder is read in filename order — which for phone footage is
+chronological — and each is split into its own camera positions. A file that
+cannot be decoded is reported at the end rather than stopping the run.
+
+Nothing about this needs the camera to have been set up deliberately, because
+there is no pre-capture calibration step anywhere in this system: the 8 landmarks
+are clicked **afterwards**, on the images, and the board geometry is recovered
+from those clicks. A recording made by propping the phone and pressing record is
+exactly as usable as one made to the protocol above. What varies is the
+annotation cost — one landmark set per camera position — and how much of the
+precision budget the framing left behind.
 
 The report ends with **how many viewpoints the recording contains**, and that
 is the number that decides how the footage may be used. A session is one fixed

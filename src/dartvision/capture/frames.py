@@ -70,9 +70,14 @@ __all__ = [
     "sharpness",
     "changed_pixel_count",
     "obstructed",
+    "viewpoint_groups",
     "choose_frames",
     "find_ffmpeg",
     "extract",
+    "extract_sessions",
+    "extract_folder",
+    "find_videos",
+    "VIDEO_SUFFIXES",
 ]
 
 # Frames are analysed at this width. Small enough that a long session decodes in
@@ -319,6 +324,42 @@ def obstructed(
     return blocked
 
 
+def viewpoint_groups(
+    frames: Sequence[np.ndarray],
+    kept: Sequence[int],
+    settings: ExtractionSettings | None = None,
+) -> list[list[int]]:
+    """Split chosen stills wherever the camera ended up pointing somewhere new.
+
+    A *session* is one fixed camera position, because landmarks are annotated
+    once per session and reused across every frame in it. So a recording made
+    of three camera positions is three sessions, and the split has to happen
+    before annotation rather than be discovered during it.
+
+    The judgement is the same one ``obstructed`` makes and rests on the same
+    fact: consecutive board states differ by a few hundred pixels at most,
+    because that is what a dart is. A jump of thousands is the camera. Asked of
+    settled states rather than the raw timeline, because a body crossing the
+    shot moves as much of the picture as a camera move does and is
+    indistinguishable from one until it leaves again.
+    """
+    settings = settings or ExtractionSettings()
+    if not kept:
+        return []
+
+    budget = settings.obstruction_fraction * np.asarray(frames[0]).size
+    groups: list[list[int]] = [[kept[0]]]
+    for previous, index in zip(kept, kept[1:]):
+        moved = changed_pixel_count(
+            frames[previous], frames[index], settings.change_level
+        ) > budget
+        if moved:
+            groups.append([index])
+        else:
+            groups[-1].append(index)
+    return groups
+
+
 def choose_frames(
     frames: Sequence[np.ndarray], settings: ExtractionSettings | None = None
 ) -> tuple[list[int], int, int, int]:
@@ -427,28 +468,17 @@ def _analysis_frames(
         process.wait()
 
 
-def extract(
-    video: str | Path,
-    out_dir: str | Path,
-    settings: ExtractionSettings | None = None,
-    prefix: str = "frame",
-) -> Extraction:
-    """Pull one still per board state out of ``video``.
+VIDEO_SUFFIXES = (".mov", ".mp4", ".m4v", ".avi", ".mkv", ".mpg", ".mpeg")
 
-    Filenames are zero-padded and sequential because the annotator sorts by
-    filename and burst expansion depends on that order being right (#26).
+
+def _ensure_writable(out_dir: Path) -> None:
+    """Prove the destination is writable *before* decoding, not after.
+
+    Scanning a session takes minutes, and macOS refuses Terminal write access to
+    the Desktop and Documents by default -- so the obvious place to send output
+    is exactly the one that fails, and failing at the end throws away all of
+    that work for a reason that was knowable at the start.
     """
-    settings = settings or ExtractionSettings()
-    video, out_dir = Path(video), Path(out_dir)
-    if not video.exists():
-        raise FileNotFoundError(video)
-    ffmpeg = find_ffmpeg()
-
-    # Prove the destination is writable *before* decoding, not after. Scanning
-    # a session takes minutes, and macOS refuses Terminal write access to the
-    # Desktop and Documents by default -- so the obvious place to send output
-    # is exactly the one that fails, and failing at the end throws away all of
-    # that work for a reason that was knowable at the start.
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
     except PermissionError as error:
@@ -460,16 +490,27 @@ def extract(
             "is where captures belong."
         ) from error
 
+
+def _decode(video: Path, settings: ExtractionSettings, ffmpeg: str) -> list[np.ndarray]:
     frames = list(_analysis_frames(
         video, settings.analysis_width, settings.analysis_fps, ffmpeg
     ))
     if not frames:
         raise RuntimeError(f"{video.name} decoded to no frames")
+    return frames
 
-    kept, runs, duplicates, blocked = choose_frames(frames, settings)
 
+def _write_stills(
+    video: Path, indices: Sequence[int], out_dir: Path,
+    settings: ExtractionSettings, prefix: str, ffmpeg: str,
+) -> list[Path]:
+    """Pull each chosen still out of the source at full resolution.
+
+    Filenames are zero-padded and sequential because the annotator sorts by
+    filename and burst expansion depends on that order being right (#26).
+    """
     files: list[Path] = []
-    for position, index in enumerate(kept, start=1):
+    for position, index in enumerate(indices, start=1):
         # An analysis frame is a *time*, not a frame number in the source, so
         # the still is pulled by seeking. Seeking before the input is the fast
         # form, and the scene is by definition not moving, so landing a few
@@ -488,9 +529,15 @@ def extract(
                 + (detail[-1] if detail else "no output")
             )
         files.append(destination)
+    return files
 
+
+def _record(
+    out_dir: Path, frames_read: int, runs: int, indices: Sequence[int],
+    duplicates: int, blocked: int, files: Sequence[Path],
+) -> Extraction:
     extraction = Extraction(
-        frames_read=len(frames), still_runs=runs, kept=tuple(kept),
+        frames_read=frames_read, still_runs=runs, kept=tuple(indices),
         dropped_as_duplicate=duplicates, dropped_as_obstructed=blocked,
         files=tuple(files),
     )
@@ -498,3 +545,122 @@ def extract(
         json.dumps(extraction.to_dict(), indent=2), encoding="utf-8"
     )
     return extraction
+
+
+def extract(
+    video: str | Path,
+    out_dir: str | Path,
+    settings: ExtractionSettings | None = None,
+    prefix: str = "frame",
+) -> Extraction:
+    """Pull one still per board state out of ``video``, into one folder.
+
+    Correct only when the recording holds a single camera position. Use
+    ``extract_sessions`` when it might not, which is most of the time.
+    """
+    settings = settings or ExtractionSettings()
+    video, out_dir = Path(video), Path(out_dir)
+    if not video.exists():
+        raise FileNotFoundError(video)
+    ffmpeg = find_ffmpeg()
+    _ensure_writable(out_dir)
+
+    frames = _decode(video, settings, ffmpeg)
+    kept, runs, duplicates, blocked = choose_frames(frames, settings)
+    files = _write_stills(video, kept, out_dir, settings, prefix, ffmpeg)
+    return _record(out_dir, len(frames), runs, kept, duplicates, blocked, files)
+
+
+def extract_sessions(
+    video: str | Path,
+    out_dir: str | Path,
+    settings: ExtractionSettings | None = None,
+    prefix: str = "frame",
+    min_states: int = 2,
+) -> list[Extraction]:
+    """Extract ``video`` into one folder per camera position.
+
+    The form to reach for when a recording was not made to a protocol -- the
+    phone picked up between games, a folder of clips shot across an afternoon.
+    Splitting is not a tidiness preference: landmarks are annotated once per
+    folder and applied to everything in it, so stills from two camera positions
+    sharing a folder means one of the two gets labels belonging to the other,
+    silently and everywhere.
+
+    ``min_states`` drops a viewpoint too small to be worth annotating. Eight
+    landmark clicks to gain one image is not a trade worth making, and a
+    one-state viewpoint is usually the moment during a move rather than a
+    position anybody threw from.
+    """
+    settings = settings or ExtractionSettings()
+    video, out_dir = Path(video), Path(out_dir)
+    if not video.exists():
+        raise FileNotFoundError(video)
+    ffmpeg = find_ffmpeg()
+    _ensure_writable(out_dir)
+
+    frames = _decode(video, settings, ffmpeg)
+    kept, runs, duplicates, blocked = choose_frames(frames, settings)
+    groups = [
+        group for group in viewpoint_groups(frames, kept, settings)
+        if len(group) >= min_states
+    ]
+
+    written: list[Extraction] = []
+    for number, group in enumerate(groups, start=1):
+        session = out_dir / f"{video.stem.lower()}-{number:02d}"
+        _ensure_writable(session)
+        files = _write_stills(video, group, session, settings, prefix, ffmpeg)
+        written.append(_record(
+            session, len(frames), runs, group, duplicates, blocked, files
+        ))
+    return written
+
+
+def find_videos(directory: str | Path) -> list[Path]:
+    """Every video in ``directory``, in a stable order.
+
+    Sorted by name, which for phone footage is chronological -- ``IMG_0624``
+    precedes ``IMG_0625`` -- so session numbering follows the order they were
+    shot in rather than whatever order the filesystem happens to return.
+    """
+    directory = Path(directory)
+    if not directory.is_dir():
+        raise NotADirectoryError(directory)
+    return sorted(
+        path for path in directory.iterdir()
+        if path.is_file() and path.suffix.lower() in VIDEO_SUFFIXES
+        and not path.name.startswith(".")
+    )
+
+
+def extract_folder(
+    directory: str | Path,
+    out_dir: str | Path,
+    settings: ExtractionSettings | None = None,
+    prefix: str = "frame",
+    min_states: int = 2,
+) -> dict[Path, list[Extraction]]:
+    """Run ``extract_sessions`` over every video in a folder.
+
+    One video failing does not stop the rest: a folder of phone footage
+    reliably contains something that is not a video, or is a video ffmpeg
+    dislikes, and losing an hour of decoding to the last file in the list would
+    be a poor trade. Failures are raised together at the end, once everything
+    that could be salvaged has been.
+    """
+    videos = find_videos(directory)
+    results: dict[Path, list[Extraction]] = {}
+    failures: list[str] = []
+    for video in videos:
+        try:
+            results[video] = extract_sessions(
+                video, out_dir, settings, prefix, min_states
+            )
+        except (RuntimeError, OSError) as error:
+            failures.append(f"{video.name}: {error}")
+    if failures and not results:
+        raise RuntimeError("no video could be read:\n  " + "\n  ".join(failures))
+    if failures:
+        print("could not read:\n  " + "\n  ".join(failures))
+    return results
