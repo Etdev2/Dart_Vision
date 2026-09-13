@@ -14,16 +14,39 @@ and can run before any of the Brain exists.
 
 Three steps, and each drops something for a different reason:
 
-1. **Still runs.** Consecutive frames that barely differ. A dart in flight, a
-   hand over the board or the player walking up all move, and everything that
-   moves is dropped.
+1. **Still runs.** Consecutive frames in which nothing happened. A dart in
+   flight, a hand over the board or the player walking up all move, and
+   everything that moves is dropped.
 2. **The sharpest frame of each run.** A still run still contains focus breathing and
    compression noise; the frame with the most high-frequency detail is the one
    whose wires are crispest, and wire sharpness is what the landmark head needs.
-3. **A localized change against the frame already kept.** Two still runs either
+3. **Runs that are something standing in front of the board.** Pulling darts
+   means standing at the board, and a person standing still is as still as a
+   board is. Such a run is recognised by its neighbours rather than its
+   contents: it differs wildly from the run before it *and* from the run after
+   it, while those two resemble each other. A camera being moved fails that
+   last test -- the view after a move does not match the view before it -- which
+   is what separates an obstruction, which passes, from a new viewpoint, which
+   stays.
+4. **A localized change against the frame already kept.** Two still runs either
    side of a pause with nothing thrown are the same board twice.
 
 What survives is the empty board, then each dart as it lands.
+
+Step 1 asks "did anything happen?" twice over, and both questions are needed
+because a dart is *small*. Measured on a real session -- a board filling 43% of
+a portrait frame's width -- a landed dart covers about 90 of 65,000 analysis
+pixels, so it moves the frame's mean brightness by 0.2 grey levels against a
+threshold of 2.0. A mean cannot see a dart at all. Segmenting on the mean alone
+therefore never split a visit: a run began when the player stepped out of shot
+and ended when they stepped back in, spanning all three darts, and the session
+yielded one still per visit instead of one per dart.
+
+So stillness is two tests, and a frame must pass both. The mean catches motion
+that is *large* -- the camera moving, a body crossing the frame. A count of
+pixels changing past a level catches motion that is *small and bright* -- a dart
+arriving. That is the same measure, and the same reasoning, step 3 already uses
+to tell a dart from sensor noise; it simply belongs in both places.
 """
 
 from __future__ import annotations
@@ -41,9 +64,12 @@ __all__ = [
     "ExtractionSettings",
     "Extraction",
     "frame_differences",
+    "frame_statistics",
+    "runs_of_true",
     "still_runs",
     "sharpness",
     "changed_pixel_count",
+    "obstructed",
     "choose_frames",
     "find_ffmpeg",
     "extract",
@@ -75,6 +101,19 @@ class ExtractionSettings:
     a moment to stop wobbling, and a hand pausing mid-reach should not read as
     a state.
 
+    ``still_pixels`` is the companion test: how many pixels may change by more
+    than ``change_level`` between consecutive frames while the scene still counts
+    as unchanged. Sensor and compression noise rarely move a pixel by 25 grey
+    levels at all, so the floor sits near zero; an arriving dart is roughly 90
+    pixels. The default leaves a wide margin either side, and ``--diagnose``
+    prints the distribution from your own footage so it can be set on evidence
+    rather than on this paragraph.
+
+    ``obstruction_fraction`` is the share of the frame that has to change before
+    a difference stops being a dart and starts being a body. Three darts are
+    a few hundred pixels; someone standing at the board is half the picture.
+    Anything in between is not a thing that happens.
+
     ``change_level`` and ``changed_pixels`` decide whether anything was actually
     thrown between two still runs. A perceptual hash is the obvious tool and the
     wrong one: at 192 px of analysis width a dart spans about ten pixels, and a
@@ -89,21 +128,27 @@ class ExtractionSettings:
     """
 
     still: float = 2.0
+    still_pixels: int = 25
     min_still_frames: int = 5
     change_level: float = 25.0
     changed_pixels: int = 10
+    obstruction_fraction: float = 0.05
     analysis_width: int = ANALYSIS_WIDTH
     analysis_fps: float = ANALYSIS_FPS
 
     def __post_init__(self) -> None:
         if self.still <= 0:
             raise ValueError("still must be positive")
+        if self.still_pixels < 0:
+            raise ValueError("still_pixels cannot be negative")
         if self.min_still_frames < 1:
             raise ValueError("min_still_frames must be at least 1")
         if not 0 < self.change_level <= 255:
             raise ValueError("change_level must be in (0, 255]")
         if self.changed_pixels < 1:
             raise ValueError("changed_pixels must be at least 1")
+        if not 0 < self.obstruction_fraction <= 1:
+            raise ValueError("obstruction_fraction must be in (0, 1]")
         if self.analysis_width < 32:
             raise ValueError("analysis_width must be at least 32")
         if self.analysis_fps <= 0:
@@ -118,6 +163,7 @@ class Extraction:
     still_runs: int
     kept: tuple[int, ...]
     dropped_as_duplicate: int
+    dropped_as_obstructed: int = 0
     files: tuple[Path, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
@@ -126,6 +172,7 @@ class Extraction:
             "still_runs": self.still_runs,
             "kept": list(self.kept),
             "dropped_as_duplicate": self.dropped_as_duplicate,
+            "dropped_as_obstructed": self.dropped_as_obstructed,
             "files": [str(f) for f in self.files],
         }
 
@@ -142,22 +189,59 @@ def frame_differences(frames: Sequence[np.ndarray]) -> np.ndarray:
     return np.concatenate([[0.0], np.abs(np.diff(stack, axis=0)).mean(axis=(1, 2))])
 
 
-def still_runs(
-    differences: Sequence[float], threshold: float, min_length: int
-) -> list[tuple[int, int]]:
-    """Index ranges (inclusive) over which the scene barely changed."""
+def frame_statistics(
+    frames: Sequence[np.ndarray], level: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Both stillness measures, against the previous frame, in one pass.
+
+    ``(mean absolute difference, pixels changed by more than ``level``)``, with
+    a leading zero apiece so index *i* describes the step into frame *i* and the
+    first frame is still by definition.
+
+    Computed pair by pair rather than by stacking the whole session: a
+    twenty-minute recording is six thousand analysis frames, and one float32
+    stack of those is half a gigabyte for a statistic that only ever looks at
+    two frames at a time.
+    """
+    count = len(frames)
+    means = np.zeros(count, dtype=np.float64)
+    changed = np.zeros(count, dtype=np.int64)
+    for index in range(1, count):
+        difference = np.abs(
+            np.asarray(frames[index], dtype=np.int16)
+            - np.asarray(frames[index - 1], dtype=np.int16)
+        )
+        means[index] = difference.mean()
+        changed[index] = int((difference > level).sum())
+    return means, changed
+
+
+def runs_of_true(mask: Sequence[bool], min_length: int) -> list[tuple[int, int]]:
+    """Index ranges (inclusive) over which ``mask`` held, lasting long enough."""
     runs: list[tuple[int, int]] = []
     start: int | None = None
-    for index, value in enumerate(differences):
-        if value <= threshold:
+    for index, value in enumerate(mask):
+        if value:
             start = index if start is None else start
             continue
         if start is not None and index - start >= min_length:
             runs.append((start, index - 1))
         start = None
-    if start is not None and len(differences) - start >= min_length:
-        runs.append((start, len(differences) - 1))
+    if start is not None and len(mask) - start >= min_length:
+        runs.append((start, len(mask) - 1))
     return runs
+
+
+def still_runs(
+    differences: Sequence[float], threshold: float, min_length: int
+) -> list[tuple[int, int]]:
+    """Index ranges (inclusive) over which the scene barely changed.
+
+    The mean test on its own. Kept because it is the readable half of the rule
+    and is what a timeline plot shows; ``choose_frames`` applies it together
+    with the pixel-count test, which is the half that can see a dart.
+    """
+    return runs_of_true([value <= threshold for value in differences], min_length)
 
 
 def sharpness(frame: np.ndarray) -> float:
@@ -187,29 +271,66 @@ def changed_pixel_count(before: np.ndarray, after: np.ndarray, level: float) -> 
     return int((difference > level).sum())
 
 
+def obstructed(
+    frames: Sequence[np.ndarray], candidates: Sequence[int], settings: ExtractionSettings
+) -> set[int]:
+    """Which candidates are something standing in front of the board.
+
+    Judged by a candidate's neighbours, not by itself, because nothing in a
+    single frame says whether the dark shape in the middle is a person: the
+    board is never located, and locating it is the model's job, not this one's.
+    What is decidable is whether the view *came back*. An obstruction is a
+    parenthesis -- the frames either side of it match each other and neither
+    matches the middle. A camera being moved looks identical from the inside
+    and different from the outside: the views either side do not match, so the
+    test declines to call it an obstruction and the new viewpoint is kept.
+    """
+    budget = settings.obstruction_fraction * np.asarray(frames[0]).size
+    level = settings.change_level
+
+    def far(left: int, right: int) -> bool:
+        return changed_pixel_count(frames[left], frames[right], level) > budget
+
+    return {
+        middle
+        for before, middle, after in zip(candidates, candidates[1:], candidates[2:])
+        if far(before, middle) and far(middle, after) and not far(before, after)
+    }
+
+
 def choose_frames(
     frames: Sequence[np.ndarray], settings: ExtractionSettings | None = None
-) -> tuple[list[int], int, int]:
-    """``(frame indices to keep, still runs found, duplicates dropped)``."""
+) -> tuple[list[int], int, int, int]:
+    """``(indices to keep, still runs, duplicates dropped, obstructions dropped)``."""
     settings = settings or ExtractionSettings()
-    runs = still_runs(
-        frame_differences(frames), settings.still, settings.min_still_frames
-    )
+    means, changed = frame_statistics(frames, settings.change_level)
+    settled = [
+        mean <= settings.still and count <= settings.still_pixels
+        for mean, count in zip(means, changed)
+    ]
+    runs = runs_of_true(settled, settings.min_still_frames)
+
+    candidates = [
+        max(range(start, end + 1), key=lambda i: sharpness(frames[i]))
+        for start, end in runs
+    ]
+    blocked = obstructed(frames, candidates, settings)
 
     kept: list[int] = []
     duplicates = 0
     previous: np.ndarray | None = None
-    for start, end in runs:
-        best = max(range(start, end + 1), key=lambda i: sharpness(frames[i]))
+    for index in candidates:
+        if index in blocked:
+            continue
         if previous is not None:
-            changed = changed_pixel_count(previous, frames[best], settings.change_level)
-            if changed < settings.changed_pixels:
+            moved = changed_pixel_count(previous, frames[index], settings.change_level)
+            if moved < settings.changed_pixels:
                 # The same board twice, either side of a pause. Nothing landed.
                 duplicates += 1
                 continue
-        kept.append(best)
-        previous = frames[best]
-    return kept, len(runs), duplicates
+        kept.append(index)
+        previous = frames[index]
+    return kept, len(runs), duplicates, len(blocked)
 
 
 # --------------------------------------------------------------------------
@@ -324,7 +445,7 @@ def extract(
     if not frames:
         raise RuntimeError(f"{video.name} decoded to no frames")
 
-    kept, runs, duplicates = choose_frames(frames, settings)
+    kept, runs, duplicates, blocked = choose_frames(frames, settings)
 
     files: list[Path] = []
     for position, index in enumerate(kept, start=1):
@@ -349,7 +470,8 @@ def extract(
 
     extraction = Extraction(
         frames_read=len(frames), still_runs=runs, kept=tuple(kept),
-        dropped_as_duplicate=duplicates, files=tuple(files),
+        dropped_as_duplicate=duplicates, dropped_as_obstructed=blocked,
+        files=tuple(files),
     )
     (out_dir / "extraction.json").write_text(
         json.dumps(extraction.to_dict(), indent=2), encoding="utf-8"

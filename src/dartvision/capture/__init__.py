@@ -5,14 +5,18 @@ from dartvision.capture.frames import (
     ExtractionSettings,
     changed_pixel_count,
     choose_frames,
+    obstructed,
     extract,
     find_ffmpeg,
     frame_differences,
+    frame_statistics,
+    runs_of_true,
     sharpness,
     still_runs,
 )
 
 __all__ = [
-    "Extraction", "ExtractionSettings", "changed_pixel_count", "choose_frames", "extract",
-    "find_ffmpeg", "frame_differences", "sharpness", "still_runs",
+    "Extraction", "ExtractionSettings", "changed_pixel_count", "choose_frames", "extract", "obstructed",
+    "find_ffmpeg", "frame_differences", "frame_statistics", "runs_of_true",
+    "sharpness", "still_runs",
 ]

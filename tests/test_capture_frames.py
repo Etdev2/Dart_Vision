@@ -16,6 +16,7 @@ import pytest
 
 from dartvision.capture import (
     ExtractionSettings,
+    changed_pixel_count,
     choose_frames,
     extract,
     find_ffmpeg,
@@ -104,7 +105,7 @@ def test_sharpness_prefers_the_crisper_frame():
 # --------------------------------------------------------------------------
 
 def test_one_frame_is_kept_per_board_state():
-    kept, runs, duplicates = choose_frames(session_frames())
+    kept, runs, duplicates, _ = choose_frames(session_frames())
     assert runs == 4
     assert len(kept) == 4, "expected the empty board and each dart as it landed"
     assert duplicates == 0
@@ -118,7 +119,7 @@ def test_the_same_board_twice_is_not_two_states():
         + [moving(seed=50 + i) for i in range(4)]
         + [board(1, seed=200 + i) for i in range(8)]     # nothing was thrown
     )
-    kept, runs, duplicates = choose_frames(frames)
+    kept, runs, duplicates, _ = choose_frames(frames)
 
     assert runs == 2
     assert len(kept) == 1
@@ -129,8 +130,6 @@ def test_a_single_dart_is_not_mistaken_for_the_same_board():
     """A perceptual hash cannot see this, which is why it is not used. At
     analysis width a dart spans about ten pixels and a difference hash
     downsamples to 8x8, so an entire dart fits inside one hash cell."""
-    from dartvision.capture import changed_pixel_count
-
     before, after = board(darts=1, noise=0.0), board(darts=2, noise=0.0)
     assert changed_pixel_count(before, after, level=25.0) > 10
 
@@ -140,7 +139,7 @@ def test_a_single_dart_is_not_mistaken_for_the_same_board():
 
 
 def test_a_video_of_nothing_but_movement_keeps_nothing():
-    kept, runs, _ = choose_frames([moving(seed=i) for i in range(30)])
+    kept, runs, _, _ = choose_frames([moving(seed=i) for i in range(30)])
     assert runs == 0 and kept == []
 
 
@@ -148,9 +147,10 @@ def test_the_kept_frame_is_the_sharpest_of_its_run():
     """Focus breathing within a held shot: the crispest frame is the one worth
     keeping, because wire sharpness is what the landmark head reads.
 
-    The still threshold is opened right up so this tests the *selection* alone.
-    A blur large enough to measure is also large enough to break a still run,
-    and the two concerns should not be tangled in one assertion.
+    Both still thresholds are opened right up so this tests the *selection*
+    alone. A blur large enough to measure is also large enough to break a still
+    run -- on the mean and on the pixel count alike -- and the two concerns
+    should not be tangled in one assertion.
     """
     from PIL import Image, ImageFilter
 
@@ -159,8 +159,9 @@ def test_the_kept_frame_is_the_sharpest_of_its_run():
         Image.fromarray(crisp).filter(ImageFilter.GaussianBlur(1.4)), dtype=np.uint8
     )
     frames = [blurred, blurred, crisp, blurred, blurred]
-    kept, runs, _ = choose_frames(
-        frames, ExtractionSettings(min_still_frames=3, still=255.0)
+    kept, runs, _, _ = choose_frames(
+        frames,
+        ExtractionSettings(min_still_frames=3, still=255.0, still_pixels=10_000_000),
     )
 
     assert runs == 1
@@ -298,3 +299,135 @@ def test_a_missing_video_is_caught_before_anything_else(tmp_path):
     """The order matters: a bad path should not first spend minutes decoding."""
     with pytest.raises(FileNotFoundError):
         extract(tmp_path / "nope.mp4", tmp_path / "out")
+
+
+# --------------------------------------------------------------------------
+# The regression this module was rewritten for
+# --------------------------------------------------------------------------
+
+def unattended_board(darts: int = 0, seed: int = 0) -> np.ndarray:
+    """A frame shot the way a session actually gets recorded.
+
+    The phone is propped and pointed up at the board, so the player is never in
+    shot: between one dart and the next, *nothing* in the frame moves except the
+    dart itself. The board fills a fraction of a portrait frame and the rest is
+    a flat wall -- the proportions measured off a real session, where the board
+    spanned 43% of the frame's width.
+    """
+    height, width = 341, 192                       # 1080x1920 at analysis width
+    rng = np.random.default_rng(seed)
+    frame = np.full((height, width), 230.0)        # a pale wall
+    centre_y, centre_x, radius = 110, 96, 41       # the board, 43% of the width
+    ys, xs = np.ogrid[:height, :width]
+    inside = (ys - centre_y) ** 2 + (xs - centre_x) ** 2 <= radius ** 2
+    frame[inside] = 60.0
+    for index in range(darts):
+        y, x = centre_y - 20 + index * 14, centre_x - 12 + index * 12
+        frame[y:y + 30, x:x + 3] = 240.0           # ~90 px of protruding dart
+    return np.clip(frame + rng.normal(0, 1.2, frame.shape), 0, 255).astype(np.uint8)
+
+
+def unattended_visit() -> list[np.ndarray]:
+    """One visit: an empty board, then three darts, nobody else in frame."""
+    frames: list[np.ndarray] = []
+    for darts in range(4):
+        if darts:
+            frames.append(unattended_board(darts - 1, seed=900 + darts))  # in flight
+        frames += [unattended_board(darts, seed=darts * 20 + i) for i in range(10)]
+    return frames
+
+
+def test_a_landing_dart_is_too_small_for_the_mean_to_see():
+    """The measurement behind the rewrite, asserted so it cannot quietly change."""
+    before, after = unattended_board(1, seed=0), unattended_board(2, seed=0)
+    mean = float(np.abs(after.astype(float) - before.astype(float)).mean())
+
+    assert mean < ExtractionSettings.still, (
+        "a dart must move the frame mean by less than the still threshold -- "
+        "that is precisely why segmenting on the mean alone loses darts"
+    )
+    assert changed_pixel_count(before, after, level=25.0) > 50, (
+        "and must be plainly visible to the pixel-count test that replaced it"
+    )
+
+
+def test_every_dart_of_an_unattended_visit_is_kept():
+    """The bug from session-01: three darts thrown with nobody in shot came back
+    as a single still, because only a person walking into frame ever ended a
+    run. Each board state must now get its own."""
+    kept, runs, duplicates, _ = choose_frames(unattended_visit())
+
+    assert runs == 4, "the empty board and each dart in turn"
+    assert len(kept) == 4
+    assert duplicates == 0
+
+
+def test_the_old_mean_only_rule_would_have_lost_them():
+    """Guards the fix itself: relax the pixel test and the old failure returns."""
+    blind = ExtractionSettings(still_pixels=10_000_000)
+    kept, runs, _, _ = choose_frames(unattended_visit(), blind)
+
+    assert runs == 1 and len(kept) == 1
+
+
+def test_a_frame_mid_flight_is_never_the_one_kept():
+    """session-01's first still had a dart in mid-air. A moving dart changes
+    pixels, so the frame holding it cannot be inside a still run."""
+    frames = unattended_visit()
+    kept, _, _, _ = choose_frames(frames)
+
+    in_flight = {1, 12, 23}          # where unattended_visit puts the throws
+    assert not (set(kept) & in_flight)
+
+
+def test_a_negative_pixel_budget_is_refused():
+    with pytest.raises(ValueError):
+        ExtractionSettings(still_pixels=-1)
+
+
+def obstruction(seed: int = 0) -> np.ndarray:
+    """Someone standing at the board, pulling their darts out."""
+    rng = np.random.default_rng(seed)
+    frame = unattended_board(0, seed=seed).astype(float)
+    frame[:, 40:150] = 90.0
+    return np.clip(frame + rng.normal(0, 1.2, frame.shape), 0, 255).astype(np.uint8)
+
+
+def test_someone_standing_at_the_board_is_not_a_board_state():
+    """A person pulling darts stands still, and a still person reads as a still
+    scene. The run is recognised by its neighbours: the board before and the
+    board after match each other, and neither matches the middle."""
+    frames = (
+        [unattended_board(3, seed=i) for i in range(10)]
+        + [obstruction(seed=300 + i) for i in range(10)]
+        + [unattended_board(0, seed=400 + i) for i in range(10)]
+    )
+    kept, runs, _, blocked = choose_frames(frames)
+
+    assert runs == 3, "all three stretches are genuinely still"
+    assert blocked == 1
+    assert len(kept) == 2, "the full board and the empty board, not the body"
+
+
+def test_a_camera_move_is_not_mistaken_for_an_obstruction():
+    """The view after a move does not match the view before it, so the middle
+    run is a new viewpoint to keep rather than a body to discard."""
+    def shifted(darts, seed):
+        return np.roll(unattended_board(darts, seed=seed), 40, axis=1)
+
+    frames = (
+        [unattended_board(2, seed=i) for i in range(10)]
+        + [shifted(2, seed=500 + i) for i in range(10)]
+        + [shifted(3, seed=600 + i) for i in range(10)]
+    )
+    kept, runs, _, blocked = choose_frames(frames)
+
+    assert runs == 3
+    assert blocked == 0, "a new viewpoint is not an obstruction"
+    assert len(kept) == 3
+
+
+@pytest.mark.parametrize("value", [0.0, 1.5, -0.2])
+def test_an_impossible_obstruction_fraction_is_refused(value):
+    with pytest.raises(ValueError):
+        ExtractionSettings(obstruction_fraction=value)

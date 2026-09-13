@@ -95,9 +95,30 @@ deliberate coverage of the hard cases.
 ## Recording video instead of photographs
 
 Easier, and slightly *better*: the app reads video frames, so training on video
-frames removes a domain gap rather than adding one. Resolution is not the
-constraint — 1080p already puts a 10 mm ring on about 20 px, and the model's
-input is 768 px, so anything above that is discarded in the downscale anyway.
+frames removes a domain gap rather than adding one.
+
+**Resolution is not the constraint; framing is.** This paragraph used to say
+1080p puts a 10 mm ring on about 20 px and that anything above the model's 768 px
+input is discarded anyway. Both halves are true only of a board that fills a
+square frame, and the first real session was neither. The model stretches a whole
+frame onto a 768 px square, so a portrait 1080×1920 recording is squashed 2.5×
+vertically and 1.4× horizontally before the model sees anything, and the double
+ring lands here:
+
+| How the board is framed | ring across | ring down |
+| --- | --- | --- |
+| 43% of a portrait frame's width (session-01, as shot) | 9.7 px | 3.0 px |
+| filling a portrait frame's width | 21.5 px | 6.6 px |
+| filling a **square** frame | 21.5 px | 11.8 px |
+
+Against a floor of 10 px (`model.spec.MIN_RING_PX`). Two things follow. **Fill
+the frame with the board** — it is the single largest factor, worth a factor of
+two. And **the portrait-to-square stretch costs more than framing can recover**:
+even a perfectly framed portrait video lands at 6.6 px. Shoot so the board fills
+the frame in *both* directions — stand closer and turn the phone whichever way
+puts the board across the short side — or accept that the vertical precision is
+roughly half the horizontal. Squaring up the frame around the board at training
+time would remove this entirely and is not yet built.
 
 Three settings matter, and the first will ruin a session silently:
 
@@ -112,7 +133,20 @@ Three settings matter, and the first will ruin a session silently:
    what a wire is.
 
 Then **throw, pause about two seconds, throw**. The pause is what the extractor
-looks for:
+looks for.
+
+Scan the first video before committing a session to it:
+
+```bash
+python -m dartvision.capture --video session.mp4 --diagnose
+```
+
+That writes nothing. It reports how much changed between frames, how many times
+the camera itself moved, and what each candidate threshold would have kept, so
+the settings are chosen against your footage rather than against the reasoning
+in `capture/frames.py`. **Aim for about four kept frames per visit.** Fewer means
+whole visits are collapsing into one still; far more means noise is reading as a
+dart. Then run it for real:
 
 ```bash
 python -m dartvision.capture --video session.mp4 --out data/captures/garage/session-01
@@ -120,8 +154,14 @@ python -m dartvision.capture --video session.mp4 --out data/captures/garage/sess
 
 It keeps one still per board state — the empty board, then each dart as it
 lands — by finding runs of frames where nothing moves, taking the sharpest
-frame of each run, and dropping runs where nothing actually landed. Four frames
-a visit, 75 visits, 300 images: the same target, without 300 shutter presses.
+frame of each run, dropping runs that are a body standing at the board, and
+dropping runs where nothing actually landed. Four frames a visit, 75 visits,
+300 images: the same target, without 300 shutter presses.
+
+If `--diagnose` reports the camera moving, that is a session boundary every
+time, not a blemish: the landmarks are annotated once per session and a moved
+phone invalidates them for everything after the move. A mount is the fix; the
+report tells you whether you have one that holds.
 
 Long recordings are the expected case, so the video is scanned at 5 frames a
 second rather than its own rate: a pause of a second still spans five frames,
