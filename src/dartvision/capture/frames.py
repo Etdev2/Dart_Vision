@@ -302,6 +302,22 @@ def extract(
         raise FileNotFoundError(video)
     ffmpeg = find_ffmpeg()
 
+    # Prove the destination is writable *before* decoding, not after. Scanning
+    # a session takes minutes, and macOS refuses Terminal write access to the
+    # Desktop and Documents by default -- so the obvious place to send output
+    # is exactly the one that fails, and failing at the end throws away all of
+    # that work for a reason that was knowable at the start.
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError as error:
+        raise PermissionError(
+            f"cannot write to {out_dir}. On macOS, Terminal needs explicit "
+            "permission for the Desktop and Documents folders (System Settings "
+            "> Privacy & Security > Files and Folders). Writing somewhere inside "
+            "the project instead — data/captures/… — avoids that entirely, and "
+            "is where captures belong."
+        ) from error
+
     frames = list(_analysis_frames(
         video, settings.analysis_width, settings.analysis_fps, ffmpeg
     ))
@@ -309,7 +325,6 @@ def extract(
         raise RuntimeError(f"{video.name} decoded to no frames")
 
     kept, runs, duplicates = choose_frames(frames, settings)
-    out_dir.mkdir(parents=True, exist_ok=True)
 
     files: list[Path] = []
     for position, index in enumerate(kept, start=1):

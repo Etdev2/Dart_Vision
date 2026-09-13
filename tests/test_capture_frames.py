@@ -8,6 +8,7 @@ exactly the part that unit tests cannot vouch for.
 
 from __future__ import annotations
 
+import pathlib
 import subprocess
 
 import numpy as np
@@ -257,5 +258,43 @@ def test_a_recorded_session_yields_one_still_per_dart(ffmpeg, tmp_path):
 
 
 def test_a_missing_video_is_reported_clearly(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        extract(tmp_path / "nope.mp4", tmp_path / "out")
+
+
+def test_an_unwritable_destination_fails_before_the_video_is_decoded(tmp_path, monkeypatch):
+    """Scanning a session takes minutes, and macOS refuses Terminal write access
+    to the Desktop by default -- so the obvious place to send output is exactly
+    the one that fails. Failing at the end throws away all that work for a
+    reason that was knowable at the start.
+
+    The claim tested is the *ordering*, so the decoder is replaced with
+    something that fails loudly if it is ever reached. Real permissions cannot
+    be used: the suite may run as root, which bypasses them.
+    """
+    from dartvision.capture import frames as module
+
+    video = tmp_path / "session.mp4"
+    video.write_bytes(b"not really a video, and never read")
+
+    monkeypatch.setattr(module, "find_ffmpeg", lambda: "ffmpeg")
+    monkeypatch.setattr(module, "_analysis_frames", lambda *a, **k: pytest.fail(
+        "the video was decoded before the destination was checked"))
+
+    real_mkdir = pathlib.Path.mkdir
+
+    def refuse(self, *args, **kwargs):
+        if "blocked" in str(self):
+            raise PermissionError(1, "Operation not permitted")
+        return real_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(pathlib.Path, "mkdir", refuse)
+
+    with pytest.raises(PermissionError, match="cannot write to"):
+        extract(video, tmp_path / "blocked" / "frames")
+
+
+def test_a_missing_video_is_caught_before_anything_else(tmp_path):
+    """The order matters: a bad path should not first spend minutes decoding."""
     with pytest.raises(FileNotFoundError):
         extract(tmp_path / "nope.mp4", tmp_path / "out")
