@@ -88,3 +88,31 @@ def test_it_forwards_the_help_text(tmp_path):
     )
     assert result.returncode == 0, result.stderr.decode()[-2000:]
     assert b"--video-dir" in result.stdout
+
+
+# --------------------------------------------------------------------------
+# What the command line says when something a person can fix goes wrong
+# --------------------------------------------------------------------------
+
+def test_a_missing_video_is_a_sentence_not_a_traceback(tmp_path, capsys):
+    """This user has already been handed one traceback for a path problem."""
+    from dartvision.capture import __main__ as cli
+
+    code = cli.main(["--video", str(tmp_path / "nope.mov"), "--out", str(tmp_path)])
+    printed = capsys.readouterr().out
+
+    assert code == 1
+    assert "there is no file at" in printed
+    assert "Traceback" not in printed
+
+
+def test_a_destination_that_is_not_a_folder_is_a_sentence(tmp_path, capsys):
+    from dartvision.capture import __main__ as cli
+
+    not_a_folder = tmp_path / "file.txt"
+    not_a_folder.write_text("x")
+
+    code = cli.main(["--video-dir", str(not_a_folder), "--out", str(tmp_path)])
+
+    assert code == 1
+    assert "Traceback" not in capsys.readouterr().out

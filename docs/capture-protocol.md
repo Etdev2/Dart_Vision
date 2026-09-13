@@ -189,6 +189,15 @@ Every video in the folder is read in filename order — which for phone footage 
 chronological — and each is split into its own camera positions. A file that
 cannot be decoded is reported at the end rather than stopping the run.
 
+Re-running into a directory that already holds an earlier extraction is refused,
+naming every recording that conflicts, before anything is decoded. A second run
+can split the same recording differently — a threshold changed, or the code did
+— and the leftovers would sit beside the new folders under names that do not
+tell them apart. Annotating that mixture means labelling the same frames twice
+under two landmark sets, which is a corpus problem found long after the effort
+is spent. Pass `--overwrite` to replace that recording's folders, or `--out`
+somewhere new to keep both.
+
 Nothing about this needs the camera to have been set up deliberately, because
 there is no pre-capture calibration step anywhere in this system: the 8 landmarks
 are clicked **afterwards**, on the images, and the board geometry is recovered

@@ -151,7 +151,11 @@ def scan_video(
     settings = settings or ExtractionSettings()
     video = Path(video)
     if not video.exists():
-        raise FileNotFoundError(video)
+        raise FileNotFoundError(
+            f"there is no file at {video}. Check the path — dragging the file "
+            "from Finder into the Terminal window types it correctly, spaces "
+            "and all."
+        )
     frames = list(_analysis_frames(
         video, settings.analysis_width, settings.analysis_fps, find_ffmpeg()
     ))

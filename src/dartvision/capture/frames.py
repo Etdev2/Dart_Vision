@@ -52,6 +52,7 @@ to tell a dart from sensor noise; it simply belongs in both places.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -79,6 +80,8 @@ __all__ = [
     "extract_sessions",
     "extract_folder",
     "find_videos",
+    "existing_sessions",
+    "clear_sessions",
     "VIDEO_SUFFIXES",
 ]
 
@@ -640,7 +643,11 @@ def extract(
     settings = settings or ExtractionSettings()
     video, out_dir = Path(video), Path(out_dir)
     if not video.exists():
-        raise FileNotFoundError(video)
+        raise FileNotFoundError(
+            f"there is no file at {video}. Check the path — dragging the file "
+            "from Finder into the Terminal window types it correctly, spaces "
+            "and all."
+        )
     ffmpeg = find_ffmpeg()
     _ensure_writable(out_dir)
 
@@ -650,12 +657,37 @@ def extract(
     return _record(out_dir, len(frames), runs, kept, duplicates, blocked, files)
 
 
+def existing_sessions(video: Path, out_dir: Path) -> list[Path]:
+    """Session folders a previous extraction of ``video`` left behind."""
+    if not out_dir.is_dir():
+        return []
+    pattern = re.compile(rf"^{re.escape(video.stem.lower())}-\d+$")
+    return sorted(
+        path for path in out_dir.iterdir()
+        if path.is_dir() and pattern.match(path.name)
+    )
+
+
+def clear_sessions(video: Path, out_dir: Path) -> list[Path]:
+    """Remove a previous extraction of ``video``, and nothing else.
+
+    Matched against this video's own stem rather than emptied wholesale: an
+    output directory collects sessions from every recording in a folder, and a
+    re-extraction of one of them has no business touching the other thirty.
+    """
+    removed = existing_sessions(video, out_dir)
+    for path in removed:
+        shutil.rmtree(path)
+    return removed
+
+
 def extract_sessions(
     video: str | Path,
     out_dir: str | Path,
     settings: ExtractionSettings | None = None,
     prefix: str = "frame",
     min_states: int = 2,
+    overwrite: bool = False,
 ) -> list[Extraction]:
     """Extract ``video`` into one folder per camera position.
 
@@ -674,9 +706,34 @@ def extract_sessions(
     settings = settings or ExtractionSettings()
     video, out_dir = Path(video), Path(out_dir)
     if not video.exists():
-        raise FileNotFoundError(video)
+        raise FileNotFoundError(
+            f"there is no file at {video}. Check the path — dragging the file "
+            "from Finder into the Terminal window types it correctly, spaces "
+            "and all."
+        )
     ffmpeg = find_ffmpeg()
     _ensure_writable(out_dir)
+
+    # Checked before decoding, and refused rather than merged. How a recording
+    # divides into camera positions depends on the settings it was extracted
+    # with, so a second run can produce a different number of folders than the
+    # first -- and the leftovers are indistinguishable from the new ones by
+    # name. Annotating that mixture means labelling the same frames twice under
+    # two different landmark sets, which is a corpus problem discovered long
+    # after the effort has been spent.
+    stale = existing_sessions(video, out_dir)
+    if stale and not overwrite:
+        names = ", ".join(path.name for path in stale[:5])
+        more = f" and {len(stale) - 5} more" if len(stale) > 5 else ""
+        raise FileExistsError(
+            f"{out_dir} already holds {len(stale)} folder(s) from an earlier "
+            f"extraction of {video.name}: {names}{more}. A new run can split "
+            "the same recording differently, and the old folders would be left "
+            "beside the new ones under names telling them apart. Pass "
+            "--overwrite to replace them, or --out somewhere new to keep both."
+        )
+    if stale:
+        clear_sessions(video, out_dir)
 
     frames = _decode(video, settings, ffmpeg)
     kept, runs, duplicates, blocked = choose_frames(frames, settings)
@@ -719,6 +776,7 @@ def extract_folder(
     settings: ExtractionSettings | None = None,
     prefix: str = "frame",
     min_states: int = 2,
+    overwrite: bool = False,
 ) -> dict[Path, list[Extraction]]:
     """Run ``extract_sessions`` over every video in a folder.
 
@@ -729,12 +787,36 @@ def extract_folder(
     that could be salvaged has been.
     """
     videos = find_videos(directory)
+    out_dir = Path(out_dir)
+
+    # Every conflict, before any of the work. A folder of recordings is an
+    # hour of decoding, and refusing the fourth video after writing the first
+    # three leaves a half-extraction that has to be unpicked by hand -- where
+    # the same objection raised up front is one sentence and one flag.
+    if not overwrite:
+        conflicted = {
+            video: stale for video in videos
+            if (stale := existing_sessions(video, out_dir))
+        }
+        if conflicted:
+            listed = "\n  ".join(
+                f"{video.name}: {len(stale)} folder(s)"
+                for video, stale in conflicted.items()
+            )
+            raise FileExistsError(
+                f"{out_dir} already holds folders from an earlier extraction "
+                f"of:\n  {listed}\nA new run can split the same recording "
+                "differently, and the old folders would be left beside the new "
+                "ones under names telling them apart. Pass --overwrite to "
+                "replace them, or --out somewhere new to keep both."
+            )
+
     results: dict[Path, list[Extraction]] = {}
     failures: list[str] = []
     for video in videos:
         try:
             results[video] = extract_sessions(
-                video, out_dir, settings, prefix, min_states
+                video, out_dir, settings, prefix, min_states, overwrite
             )
         except (RuntimeError, OSError) as error:
             failures.append(f"{video.name}: {error}")

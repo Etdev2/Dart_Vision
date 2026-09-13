@@ -86,6 +86,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="pixels that must change before two stills count as different states",
     )
     parser.add_argument(
+        "--overwrite", action="store_true",
+        help="replace session folders left by an earlier extraction of the same "
+             "recording, instead of refusing to write beside them",
+    )
+    parser.add_argument(
         "--min-states", type=int, default=2,
         help="viewpoints yielding fewer stills than this are dropped; eight "
              "landmark clicks to gain one image is not a trade worth making",
@@ -93,9 +98,25 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# Failures a person caused and can fix: a destination that is not writable, a
+# folder already holding an earlier extraction, a path that is not there. They
+# are reported as sentences, because a traceback in front of a sentence written
+# for the reader buries it under thirty lines saying nothing they can act on.
+EXPECTED = (FileExistsError, FileNotFoundError, NotADirectoryError,
+            PermissionError, RuntimeError)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    try:
+        return _run(args, parser)
+    except EXPECTED as error:
+        print(f"\n{error}")
+        return 1
+
+
+def _run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
 
     settings = ExtractionSettings(
         still=args.still,
@@ -121,7 +142,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.video:
         found = {Path(args.video): extract_sessions(
-            args.video, args.out, settings, args.prefix, args.min_states
+            args.video, args.out, settings, args.prefix, args.min_states,
+            args.overwrite,
         )}
     else:
         videos = find_videos(args.video_dir)
@@ -130,7 +152,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"reading {len(videos)} video(s) from {args.video_dir}\n")
         found = extract_folder(
-            args.video_dir, args.out, settings, args.prefix, args.min_states
+            args.video_dir, args.out, settings, args.prefix, args.min_states,
+            args.overwrite,
         )
 
     stills = 0

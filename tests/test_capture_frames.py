@@ -676,3 +676,128 @@ def test_a_zero_lookback_means_none_rather_than_all():
     from dartvision.capture import frames as module
 
     assert "if RETURN_LOOKBACK else []" in Path(module.__file__).read_text()
+
+
+# --------------------------------------------------------------------------
+# Re-extracting a recording that was already extracted
+# --------------------------------------------------------------------------
+
+def test_stale_session_folders_are_found_by_the_videos_own_name(tmp_path):
+    from dartvision.capture.frames import existing_sessions
+
+    out = tmp_path / "garage"
+    for name in ("img_0632-01", "img_0632-02", "img_0635-01", "img_0632x-01",
+                 "img_0632-01-notes"):
+        (out / name).mkdir(parents=True)
+    (out / "img_0632-03.txt").write_text("not a folder")
+
+    found = existing_sessions(tmp_path / "IMG_0632.MOV", out)
+
+    assert [path.name for path in found] == ["img_0632-01", "img_0632-02"], (
+        "another recording's sessions are not this one's to touch"
+    )
+
+
+def test_clearing_removes_only_that_recordings_sessions(tmp_path):
+    from dartvision.capture.frames import clear_sessions
+
+    out = tmp_path / "garage"
+    for name in ("img_0632-01", "img_0632-02", "img_0635-01"):
+        (out / name).mkdir(parents=True)
+        (out / name / "frame-0001.jpg").write_bytes(b"")
+
+    clear_sessions(tmp_path / "IMG_0632.MOV", out)
+
+    assert sorted(path.name for path in out.iterdir()) == ["img_0635-01"]
+
+
+def test_existing_sessions_of_a_fresh_destination_is_empty(tmp_path):
+    from dartvision.capture.frames import existing_sessions
+
+    assert existing_sessions(tmp_path / "IMG_0632.MOV", tmp_path / "nothing") == []
+
+
+def test_re_extracting_refuses_to_write_beside_the_old_folders(ffmpeg, tmp_path):
+    """A second run can split the same recording differently, and the leftovers
+    are indistinguishable from the new ones by name. Annotating that mixture
+    means labelling the same frames twice under two landmark sets."""
+    from dartvision.capture.frames import extract_sessions
+
+    video = tmp_path / "IMG_0632.mp4"
+    encode(ffmpeg, unattended_visit(), video)
+    out = tmp_path / "garage"
+    extract_sessions(video, out)
+
+    with pytest.raises(FileExistsError, match="earlier extraction"):
+        extract_sessions(video, out)
+
+
+def test_the_refusal_comes_before_the_decoding(ffmpeg, tmp_path, monkeypatch):
+    """Scanning a session takes minutes; discovering the conflict afterwards
+    throws all of it away for a reason knowable at the start."""
+    from dartvision.capture import frames as module
+
+    video = tmp_path / "IMG_0632.mp4"
+    encode(ffmpeg, unattended_visit(), video)
+    out = tmp_path / "garage"
+    module.extract_sessions(video, out)
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("decoded before checking the destination")
+
+    monkeypatch.setattr(module, "_decode", refuse)
+    with pytest.raises(FileExistsError):
+        module.extract_sessions(video, out)
+
+
+def test_overwrite_replaces_the_earlier_extraction(ffmpeg, tmp_path):
+    from dartvision.capture.frames import extract_sessions
+
+    video = tmp_path / "IMG_0632.mp4"
+    encode(ffmpeg, unattended_visit(), video)
+    out = tmp_path / "garage"
+
+    first = extract_sessions(video, out)
+    (first[0].files[0].parent / "left-over.jpg").write_bytes(b"")
+
+    second = extract_sessions(video, out, overwrite=True)
+
+    assert len(second) == len(first)
+    assert not (second[0].files[0].parent / "left-over.jpg").exists()
+
+
+def test_a_folder_run_names_every_conflict_before_writing_anything(ffmpeg, tmp_path):
+    """A folder of recordings is an hour of decoding. Refusing the fourth video
+    after writing the first three leaves a half-extraction to unpick by hand."""
+    from dartvision.capture.frames import extract_folder
+
+    source = tmp_path / "Darts"
+    source.mkdir()
+    for name in ("IMG_0624.mp4", "IMG_0625.mp4", "IMG_0626.mp4"):
+        encode(ffmpeg, unattended_visit(), source / name)
+
+    out = tmp_path / "garage"
+    (out / "img_0624-01").mkdir(parents=True)
+    (out / "img_0626-01").mkdir(parents=True)
+
+    with pytest.raises(FileExistsError) as raised:
+        extract_folder(source, out)
+
+    message = str(raised.value)
+    assert "IMG_0624.mp4" in message and "IMG_0626.mp4" in message
+    assert "IMG_0625.mp4" not in message, "only the ones that actually conflict"
+    assert not (out / "img_0625-01").exists(), "nothing written before refusing"
+
+
+def test_a_folder_run_proceeds_once_told_to_overwrite(ffmpeg, tmp_path):
+    from dartvision.capture.frames import extract_folder
+
+    source = tmp_path / "Darts"
+    source.mkdir()
+    encode(ffmpeg, unattended_visit(), source / "IMG_0624.mp4")
+
+    out = tmp_path / "garage"
+    extract_folder(source, out)
+    results = extract_folder(source, out, overwrite=True)
+
+    assert [path.name for path in results] == ["IMG_0624.mp4"]
