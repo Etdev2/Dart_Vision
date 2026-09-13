@@ -24,6 +24,10 @@ def main(argv: list[str] | None = None) -> int:
         help="how long a scene must hold to count as a board state",
     )
     parser.add_argument(
+        "--analysis-fps", type=float, default=ExtractionSettings.analysis_fps,
+        help="rate the video is scanned at; lower is faster and uses less memory",
+    )
+    parser.add_argument(
         "--changed-pixels", type=int, default=ExtractionSettings.changed_pixels,
         help="pixels that must change before two stills count as different states",
     )
@@ -35,11 +39,13 @@ def main(argv: list[str] | None = None) -> int:
             still=args.still,
             min_still_frames=args.min_still_frames,
             changed_pixels=args.changed_pixels,
+            analysis_fps=args.analysis_fps,
         ),
         prefix=args.prefix,
     )
 
-    print(f"read {result.frames_read} frames")
+    minutes = result.frames_read / max(args.analysis_fps, 1e-9) / 60
+    print(f"scanned {result.frames_read} frames (~{minutes:.1f} minutes of video)")
     print(f"found {result.still_runs} still runs")
     print(f"dropped {result.dropped_as_duplicate} as the same board state")
     print(f"kept {len(result.files)} stills in {Path(args.out)}")

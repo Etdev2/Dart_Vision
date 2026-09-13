@@ -213,8 +213,12 @@ def encode(ffmpeg: str, frames: list[np.ndarray], video) -> None:
             (frame.shape[1] * 4, frame.shape[0] * 4)
         ).save(source / f"{index:05d}.png")
 
+    # Encoded slowly on purpose. Analysis runs at 5 fps and a board state must
+    # hold for a second, so what the fixture needs is realistic *duration* --
+    # eight frames at 4 fps is the two-second pause the protocol asks for,
+    # where eight frames at 30 fps is a quarter of a second and finds nothing.
     result = subprocess.run(
-        [ffmpeg, "-y", "-framerate", "30", "-i", str(source / "%05d.png"),
+        [ffmpeg, "-y", "-framerate", "4", "-i", str(source / "%05d.png"),
          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", str(video)],
         capture_output=True, check=False,
     )
@@ -239,7 +243,9 @@ def test_a_recorded_session_yields_one_still_per_dart(ffmpeg, tmp_path):
 
     result = extract(video, tmp_path / "out")
 
-    assert result.frames_read > 30
+    # 44 source frames at 4 fps is 11 seconds, which is 55 frames at the 5 fps
+    # analysis rate.
+    assert result.frames_read > 40
     assert len(result.files) == 4, [f.name for f in result.files]
     assert [f.name for f in result.files] == [f"frame-{i:04d}.jpg" for i in range(1, 5)]
     assert (tmp_path / "out" / "extraction.json").exists()

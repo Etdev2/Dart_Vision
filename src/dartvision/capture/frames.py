@@ -53,6 +53,14 @@ __all__ = [
 # seconds, large enough that a dart landing is a clear change.
 ANALYSIS_WIDTH = 192
 
+# And at this rate, rather than the video's own. A session is minutes long and
+# what it is searched for is a pause of a second or more, so decoding every
+# frame of 30 fps footage buys nothing and costs a great deal: a 20-minute 4K
+# recording is 36,000 frames, and holding them even at analysis size is 746 MB.
+# At 5 fps the same recording is 124 MB and each pause still spans several
+# frames.
+ANALYSIS_FPS = 5.0
+
 
 @dataclass(frozen=True)
 class ExtractionSettings:
@@ -62,8 +70,10 @@ class ExtractionSettings:
     consecutive frames count as the same scene. Sensor noise on a static shot
     sits near 1; a dart entering the frame moves it far higher.
 
-    ``min_still_frames`` is how long a scene must hold. A dart takes a moment to
-    stop wobbling, and a hand pausing mid-reach should not read as a state.
+    ``min_still_frames`` is how long a scene must hold, counted in *analysis*
+    frames -- so at the default 5 fps, five of them is one second. A dart takes
+    a moment to stop wobbling, and a hand pausing mid-reach should not read as
+    a state.
 
     ``change_level`` and ``changed_pixels`` decide whether anything was actually
     thrown between two still runs. A perceptual hash is the obvious tool and the
@@ -83,6 +93,7 @@ class ExtractionSettings:
     change_level: float = 25.0
     changed_pixels: int = 10
     analysis_width: int = ANALYSIS_WIDTH
+    analysis_fps: float = ANALYSIS_FPS
 
     def __post_init__(self) -> None:
         if self.still <= 0:
@@ -95,6 +106,8 @@ class ExtractionSettings:
             raise ValueError("changed_pixels must be at least 1")
         if self.analysis_width < 32:
             raise ValueError("analysis_width must be at least 32")
+        if self.analysis_fps <= 0:
+            raise ValueError("analysis_fps must be positive")
 
 
 @dataclass(frozen=True)
@@ -221,38 +234,55 @@ def find_ffmpeg() -> str:
     )
 
 
-def _analysis_frames(video: Path, width: int, ffmpeg: str) -> Iterator[np.ndarray]:
-    """Decode the whole video small and grey, one frame at a time."""
+def _frame_size(video: Path, width: int, ffmpeg: str) -> tuple[int, int]:
+    """``(width, height)`` of the scaled analysis frame.
+
+    Learned by decoding a single frame and measuring it, rather than by parsing
+    ffmpeg's report of the stream. One frame is a few kilobytes, and the length
+    of it divided by the width *is* the height -- no text to misread, and no
+    dependency on ffprobe being installed alongside.
+    """
     probe = subprocess.run(
         [ffmpeg, "-i", str(video), "-vf", f"scale={width}:-2,format=gray",
-         "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+         "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", "-"],
         capture_output=True, check=False,
     )
-    if probe.returncode != 0:
+    if probe.returncode != 0 or not probe.stdout:
+        detail = probe.stderr.decode("utf-8", "replace").strip().splitlines()
         raise RuntimeError(
-            f"ffmpeg could not read {video.name}:\n"
-            + probe.stderr.decode("utf-8", "replace").strip().splitlines()[-1]
+            f"ffmpeg could not read {video.name}:\n" + (detail[-1] if detail else "no output")
         )
-
-    # The scale filter keeps the aspect ratio, so the height follows from the
-    # payload rather than being assumed.
-    height = _height_from(probe.stderr.decode("utf-8", "replace"), width)
-    data = np.frombuffer(probe.stdout, dtype=np.uint8)
-    count = len(data) // (width * height)
-    for index in range(count):
-        offset = index * width * height
-        yield data[offset:offset + width * height].reshape(height, width)
+    return width, len(probe.stdout) // width
 
 
-def _height_from(stderr: str, width: int) -> int:
-    """Read the scaled height out of ffmpeg's own report of the output stream."""
-    import re
+def _analysis_frames(
+    video: Path, width: int, fps: float, ffmpeg: str
+) -> Iterator[np.ndarray]:
+    """Decode the video small, grey and slow, streaming one frame at a time.
 
-    matches = re.findall(r"(\d{2,5})x(\d{2,5})", stderr)
-    for found_width, found_height in reversed(matches):
-        if int(found_width) == width:
-            return int(found_height)
-    raise RuntimeError("could not determine the decoded frame height from ffmpeg")
+    Streamed rather than collected because the whole point of this module is
+    long recordings: buffering a session's worth of decoded video before
+    looking at any of it is how a twenty-minute clip turns into a gigabyte.
+    """
+    width, height = _frame_size(video, width, ffmpeg)
+    stride = width * height
+
+    process = subprocess.Popen(
+        [ffmpeg, "-i", str(video), "-vf", f"fps={fps},scale={width}:-2,format=gray",
+         "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    try:
+        assert process.stdout is not None
+        while True:
+            payload = process.stdout.read(stride)
+            if len(payload) < stride:
+                break
+            yield np.frombuffer(payload, dtype=np.uint8).reshape(height, width)
+    finally:
+        if process.stdout:
+            process.stdout.close()
+        process.wait()
 
 
 def extract(
@@ -272,7 +302,9 @@ def extract(
         raise FileNotFoundError(video)
     ffmpeg = find_ffmpeg()
 
-    frames = list(_analysis_frames(video, settings.analysis_width, ffmpeg))
+    frames = list(_analysis_frames(
+        video, settings.analysis_width, settings.analysis_fps, ffmpeg
+    ))
     if not frames:
         raise RuntimeError(f"{video.name} decoded to no frames")
 
@@ -280,21 +312,25 @@ def extract(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     files: list[Path] = []
-    if kept:
-        # One pass over the video, pulling the chosen frames at full size.
-        selection = "+".join(f"eq(n\\,{index})" for index in kept)
-        pattern = str(out_dir / f"{prefix}-%04d.jpg")
+    for position, index in enumerate(kept, start=1):
+        # An analysis frame is a *time*, not a frame number in the source, so
+        # the still is pulled by seeking. Seeking before the input is the fast
+        # form, and the scene is by definition not moving, so landing a few
+        # milliseconds either side costs nothing.
+        at = index / settings.analysis_fps
+        destination = out_dir / f"{prefix}-{position:04d}.jpg"
         result = subprocess.run(
-            [ffmpeg, "-y", "-i", str(video), "-vf", f"select='{selection}'",
-             "-vsync", "0", "-q:v", "2", pattern],
+            [ffmpeg, "-y", "-ss", f"{at:.3f}", "-i", str(video),
+             "-frames:v", "1", "-q:v", "2", str(destination)],
             capture_output=True, check=False,
         )
-        if result.returncode != 0:
+        if result.returncode != 0 or not destination.exists():
+            detail = result.stderr.decode("utf-8", "replace").strip().splitlines()
             raise RuntimeError(
-                "ffmpeg could not write the frames:\n"
-                + result.stderr.decode("utf-8", "replace").strip().splitlines()[-1]
+                f"ffmpeg could not write a still at {at:.1f}s:\n"
+                + (detail[-1] if detail else "no output")
             )
-        files = sorted(out_dir.glob(f"{prefix}-*.jpg"))
+        files.append(destination)
 
     extraction = Extraction(
         frames_read=len(frames), still_runs=runs, kept=tuple(kept),

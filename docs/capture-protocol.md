@@ -123,6 +123,11 @@ lands — by finding runs of frames where nothing moves, taking the sharpest
 frame of each run, and dropping runs where nothing actually landed. Four frames
 a visit, 75 visits, 300 images: the same target, without 300 shutter presses.
 
+Long recordings are the expected case, so the video is scanned at 5 frames a
+second rather than its own rate: a pause of a second still spans five frames,
+while a twenty-minute session costs about 124 MB instead of 746. Nothing is
+buffered — frames stream out of ffmpeg as they decode.
+
 Check the result with the audit afterwards. If it reports 300 images carrying
 40 images' worth of information, the extraction kept too much.
 
