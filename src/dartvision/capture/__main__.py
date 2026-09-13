@@ -166,21 +166,19 @@ def _report_framing(target: Path, board_width: int | None = None) -> int:
     print(f"  it needs         {MIN_RING_PX:5.1f} px")
     print()
 
-    if first.suspect and board_width is None:
-        print(f"  What was measured is {first.aspect:.1f} times as tall as it "
-              "is wide, and a dartboard is not.")
-        print("  Almost certainly the board's dark pixels have merged with "
-              "something dark touching it —")
-        print("  the box many boards are mounted against, a shadow, a doorway. "
-              "Look at")
-        print(f"    {check}")
-        print("  and if the red box is not the board, measure its width in "
-              "pixels yourself and pass")
-        print("  --board-width. Everything above is wrong until you do.")
-        return 1
-
     if board_width is None:
-        print(f"  Check the red box is the board: {check}")
+        if first.suspect:
+            longer = "tall" if first.aspect > 1 else "wide"
+            print(f"  Note: the region found is {max(first.aspect, 1 / first.aspect):.1f}"
+                  f" times as {longer} as the other way, and a dartboard is not.")
+            print("  Its dark pixels have merged with something dark touching "
+                  "it — the box many boards")
+            print("  hang against, a shadow, a doorway. The figures above use "
+                  "the shorter side, which is")
+            print("  the one the merge did not inflate, so they are sound but "
+                  "err low for an angled board.")
+        print(f"  Check the red box: {check}   "
+              "(--board-width overrides it with a measurement by hand)")
         print()
 
     worst = min(across, down)

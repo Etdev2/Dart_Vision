@@ -65,7 +65,7 @@ class Framing:
     @property
     def fills(self) -> float:
         """Share of the frame's width the board spans."""
-        return self.board[0] / self.source[0]
+        return self.diameter / self.source[0]
 
     @property
     def aspect(self) -> float:
@@ -82,12 +82,28 @@ class Framing:
         dark touching it -- the box many boards are mounted against, a shadow,
         a doorway -- and the bounding box then spans both.
 
-        Reported rather than corrected. Separating two dark things that touch
-        needs to know where the board is, which is the question being asked;
-        what this can do honestly is say that the answer looks wrong, show the
-        box it drew, and take a measurement by hand instead.
+        Reported, and worked around rather than abandoned: see ``diameter``.
         """
         return not 0.6 <= self.aspect <= 1.6
+
+    @property
+    def diameter(self) -> int:
+        """The board's size, taking the shorter side when the region is wrong.
+
+        Merging can only ever make a region *larger* -- two dark things that
+        touch produce a box spanning both, and nothing makes a box smaller than
+        the board inside it. So whichever side is shorter is the side the merge
+        did not inflate, and on a round object that side is the diameter. A box
+        above a board inflates the height and leaves the width; a doorway
+        beside it does the reverse; either way the smaller number is the honest
+        one.
+
+        It errs low for a board seen at a steep angle, whose shorter axis is
+        genuinely foreshortened. That is the safe direction to err: it reports
+        less precision available than there is, and the decision it feeds is
+        whether to re-shoot.
+        """
+        return min(self.board) if self.suspect else self.board[0]
 
     @property
     def verdict(self) -> str:
@@ -309,11 +325,17 @@ def measure_image(
     def ring(extent: int, source_extent: int) -> float:
         return extent * input_px / source_extent * RING_MM / BOARD_OUTER_MM
 
+    # Sized from the shorter side whenever the region is the wrong shape to be
+    # a board, since a merge inflates one axis and leaves the other.
+    raw = Framing(source=source, board=board, ring_across=0, ring_down=0,
+                  ring_squared=0)
+    side = raw.diameter
+
     return Framing(
         source=source, board=board,
-        ring_across=ring(board[0], source[0]),
-        ring_down=ring(board[1], source[1]),
+        ring_across=ring(side, source[0]),
+        ring_down=ring(side, source[1]),
         # What a square crop around the board would leave: the same scale on
         # both axes, which is the fix that does not need re-shooting.
-        ring_squared=ring(board[1], min(source)),
+        ring_squared=ring(side, min(source)),
     )

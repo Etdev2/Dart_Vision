@@ -260,19 +260,42 @@ def test_a_board_mounted_against_a_dark_box_is_reported_not_guessed(tmp_path):
 
     assert measured.suspect, "a region far taller than wide is not a dartboard"
     assert measured.aspect > 1.6
+    assert measured.diameter == min(measured.board), (
+        "the merge inflated the height, so the width is the side to trust"
+    )
+    assert measured.ring_across == pytest.approx(
+        measured.diameter * DEFAULT_INPUT_PX / WIDTH * RING_MM / BOARD_OUTER_MM
+    )
 
 
-def test_the_command_line_refuses_a_suspect_measurement(tmp_path, capsys):
+def test_the_command_line_says_when_the_region_is_the_wrong_shape(tmp_path, capsys):
+    """Still answers, rather than sending the reader away to measure by hand:
+    the shorter side is the one the merge did not inflate."""
     from dartvision.capture import __main__ as cli
 
     write(dartboard_room(490, box_above=True), tmp_path / "frame-0001.jpg")
 
-    assert cli.main(["--framing", str(tmp_path)]) == 1
+    assert cli.main(["--framing", str(tmp_path)]) == 0
     printed = capsys.readouterr().out
 
-    assert "is not" in printed and "--board-width" in printed
-    assert "Everything above is wrong until you do" in printed
+    assert "a dartboard is not" in printed
+    assert "shorter side" in printed and "--board-width" in printed
     assert (tmp_path / "framing-check.jpg").exists()
+
+
+def test_a_merged_region_is_measured_as_though_it_were_round(tmp_path):
+    """The board is the same size whether or not a box is bolted above it."""
+    alone = tmp_path / "alone.png"
+    against = tmp_path / "against.png"
+    write(dartboard_room(490, box_above=False), alone)
+    write(dartboard_room(490, box_above=True), against)
+
+    clean, merged = measure_image(alone), measure_image(against)
+
+    assert not clean.suspect and merged.suspect
+    assert abs(merged.ring_across - clean.ring_across) < 0.6, (
+        "the same board must measure the same either way"
+    )
 
 
 def test_a_hand_measurement_overrides_the_detection(tmp_path, capsys):

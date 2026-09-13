@@ -130,12 +130,14 @@ measured. Look at it.** Every number above rests on an assumption about what a
 photograph of a dartboard looks like, and one photograph is the cheapest way to
 find out whether the assumption held on yours.
 
-The assumption fails in one common case, and the tool says so rather than
-guessing: **a board mounted against something dark that touches it** — the box
-many boards hang on — is one dark region with the board, and the measurement
-then spans both. A result far taller than wide is refused outright with that
-explanation. Measure the board's width in the image by hand and pass
-`--board-width`; the report is then exact.
+The assumption fails in one common case: **a board mounted against something
+dark that touches it** — the box many boards hang on — is one dark region with
+the board, and the bounding box spans both. The tool says so, and still answers,
+because a merge can only make a region *larger*. Whichever side is shorter is
+the side the merge did not inflate, and on a round object that side is the
+diameter. It errs low for a board seen at a steep angle, which is the safe
+direction when the decision is whether to re-shoot. `--board-width` overrides it
+with a measurement made by hand.
 
 Two things follow. **Fill
 the frame with the board** — it is the single largest factor, worth a factor of
