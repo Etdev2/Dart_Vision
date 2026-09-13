@@ -291,11 +291,32 @@ def obstructed(
     def far(left: int, right: int) -> bool:
         return changed_pixel_count(frames[left], frames[right], level) > budget
 
-    return {
+    blocked = {
         middle
         for before, middle, after in zip(candidates, candidates[1:], candidates[2:])
         if far(before, middle) and far(middle, after) and not far(before, after)
     }
+
+    # The first and last candidates have no pair of neighbours to sit between,
+    # so the parenthesis test cannot reach them -- and a recording that opens or
+    # closes with someone at the board is the ordinary case, not a rare one.
+    # What decides them instead is that a board state cannot differ from the
+    # state beside it by this much: three darts are a few hundred pixels and the
+    # budget is thousands. An end candidate that far from its neighbour is an
+    # obstruction or a camera move, and as a lone frame at one end of a
+    # recording it is worth little either way.
+    #
+    # Measured against the nearest *surviving* candidate rather than the
+    # adjacent one, because the adjacent one may be the obstruction just found
+    # -- and comparing a good opening frame against the body that walked in
+    # front of it would discard the frame for the body's sin.
+    survivors = [index for index in candidates if index not in blocked]
+    if len(survivors) >= 2:
+        if far(survivors[0], survivors[1]):
+            blocked.add(survivors[0])
+        if far(survivors[-2], survivors[-1]):
+            blocked.add(survivors[-1])
+    return blocked
 
 
 def choose_frames(

@@ -416,15 +416,16 @@ def test_a_camera_move_is_not_mistaken_for_an_obstruction():
         return np.roll(unattended_board(darts, seed=seed), 40, axis=1)
 
     frames = (
-        [unattended_board(2, seed=i) for i in range(10)]
+        [unattended_board(1, seed=i) for i in range(10)]
+        + [unattended_board(2, seed=50 + i) for i in range(10)]
         + [shifted(2, seed=500 + i) for i in range(10)]
         + [shifted(3, seed=600 + i) for i in range(10)]
     )
     kept, runs, _, blocked = choose_frames(frames)
 
-    assert runs == 3
+    assert runs == 4
     assert blocked == 0, "a new viewpoint is not an obstruction"
-    assert len(kept) == 3
+    assert len(kept) == 4
 
 
 @pytest.mark.parametrize("value", [0.0, 1.5, -0.2])

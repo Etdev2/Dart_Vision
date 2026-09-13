@@ -158,10 +158,24 @@ frame of each run, dropping runs that are a body standing at the board, and
 dropping runs where nothing actually landed. Four frames a visit, 75 visits,
 300 images: the same target, without 300 shutter presses.
 
-If `--diagnose` reports the camera moving, that is a session boundary every
-time, not a blemish: the landmarks are annotated once per session and a moved
-phone invalidates them for everything after the move. A mount is the fix; the
-report tells you whether you have one that holds.
+The report ends with **how many viewpoints the recording contains**, and that
+is the number that decides how the footage may be used. A session is one fixed
+phone position; landmarks are annotated once per session; so a recording with
+three viewpoints is three sessions, and extracting it to one folder puts wrong
+labels on two thirds of it. Extract each stretch separately when it reports more
+than one.
+
+It reports movement across the shot separately, and that number is expected to
+be large — you walking to the board is movement, twice a visit. It costs a
+second of footage each time and nothing else. Only a view that does not come
+back is a session boundary.
+
+One limit worth knowing: the viewpoint check finds a phone that was picked up
+and put down, not a phone that was knocked. A shift of a few pixels moves about
+as many pixels as pulling three darts does, and separating those needs the board
+located, which is the model's job rather than the extractor's. Lock the mount —
+and if it slipped anyway, the annotator shows it, because the session's single
+landmark set stops sitting on the board.
 
 Long recordings are the expected case, so the video is scanned at 5 frames a
 second rather than its own rate: a pause of a second still spans five frames,

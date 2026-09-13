@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from dartvision.capture.diagnose import render, scan_video, sweep
+from dartvision.capture.diagnose import render, scan_video, sweep, viewpoints
 from dartvision.capture.frames import ExtractionSettings, extract
 
 
@@ -63,7 +63,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.diagnose:
         measured, frames = scan_video(args.video, settings)
-        print(render(measured, sweep(frames, settings), settings))
+        views = viewpoints(frames, settings, measured.fps)
+        print(render(measured, sweep(frames, settings), settings, views))
         return 0
 
     if not args.out:

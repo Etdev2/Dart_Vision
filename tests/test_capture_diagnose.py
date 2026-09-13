@@ -12,7 +12,13 @@ import numpy as np
 import pytest
 
 from dartvision.capture import ExtractionSettings
-from dartvision.capture.diagnose import CAMERA_MOVE_FRACTION, render, scan, sweep
+from dartvision.capture.diagnose import (
+    DISTURBANCE_FRACTION,
+    render,
+    scan,
+    sweep,
+    viewpoints,
+)
 
 from tests.test_capture_frames import unattended_board, unattended_visit
 
@@ -38,7 +44,7 @@ def test_settled_needs_both_tests_to_pass():
     )
 
 
-def test_a_camera_move_is_counted_once_not_once_per_frame():
+def test_a_disturbance_is_counted_once_not_once_per_frame():
     """A phone being re-propped is one event that happens to span a second."""
     still = [unattended_board(1, seed=i) for i in range(6)]
     moved = [np.roll(unattended_board(1, seed=100 + i), 60, axis=1) for i in range(6)]
@@ -46,14 +52,14 @@ def test_a_camera_move_is_counted_once_not_once_per_frame():
     frames = still + [np.roll(f, 30, axis=1) for f in moved[:3]] + moved
 
     measured = scan(frames, SETTINGS)
-    moves = measured.camera_moves()
+    moves = measured.disturbances()
 
     assert len(moves) <= 2, f"expected one or two travel spans, got {moves}"
     assert all(end >= start for start, end in moves)
 
 
-def test_a_static_recording_reports_no_camera_movement():
-    assert scan(unattended_visit(), SETTINGS).camera_moves() == []
+def test_a_static_recording_reports_no_disturbance():
+    assert scan(unattended_visit(), SETTINGS).disturbances() == []
 
 
 def test_a_move_has_to_be_big_to_count_as_one():
@@ -61,7 +67,7 @@ def test_a_move_has_to_be_big_to_count_as_one():
     measured = scan(unattended_visit(), SETTINGS)
     dart = measured.changed.max()
 
-    assert 0 < dart < measured.pixels * CAMERA_MOVE_FRACTION
+    assert 0 < dart < measured.pixels * DISTURBANCE_FRACTION
 
 
 def test_the_sweep_reports_the_current_setting_and_agrees_with_it():
@@ -108,3 +114,87 @@ def test_an_extraction_without_a_destination_is_refused(tmp_path):
 
     with pytest.raises(SystemExit):
         cli.main(["--video", str(tmp_path / "anything.mp4")])
+
+
+# --------------------------------------------------------------------------
+# Viewpoints: how many sessions is this recording?
+# --------------------------------------------------------------------------
+
+def test_a_steady_recording_is_one_session():
+    frames = unattended_visit()
+    found = viewpoints(frames, SETTINGS, SETTINGS.analysis_fps)
+
+    assert len(found) == 1
+    assert found[0].states == 4
+
+
+def test_a_repositioned_camera_splits_the_recording():
+    """The number that decides how footage may be used: landmarks are annotated
+    once per session, so a recording with two viewpoints is two sessions."""
+    def shifted(darts, seed):
+        return np.roll(unattended_board(darts, seed=seed), 55, axis=1)
+
+    frames = (
+        [unattended_board(1, seed=i) for i in range(10)]
+        + [unattended_board(2, seed=50 + i) for i in range(10)]
+        + [shifted(0, seed=500 + i) for i in range(10)]
+        + [shifted(1, seed=600 + i) for i in range(10)]
+    )
+    found = viewpoints(frames, SETTINGS, SETTINGS.analysis_fps)
+
+    assert len(found) == 2
+    assert [view.states for view in found] == [2, 2]
+    assert found[0].end < found[1].start
+
+
+def test_someone_crossing_the_shot_is_not_a_new_viewpoint():
+    """The failure this replaced: a body entering the frame changes as much of
+    the picture as a camera move does, and for half a second looks identical."""
+    from tests.test_capture_frames import obstruction
+
+    frames = (
+        [unattended_board(1, seed=i) for i in range(10)]
+        + [unattended_board(2, seed=40 + i) for i in range(10)]
+        + [obstruction(seed=300 + i) for i in range(10)]
+        + [unattended_board(0, seed=400 + i) for i in range(10)]
+        + [unattended_board(1, seed=700 + i) for i in range(10)]
+    )
+    found = viewpoints(frames, SETTINGS, SETTINGS.analysis_fps)
+
+    assert len(found) == 1, "the camera never moved; someone walked past it"
+
+
+def test_a_recording_that_ends_with_someone_at_the_board():
+    """No neighbour on the far side to close the parenthesis, so the end rule
+    decides it: a state cannot differ from the one before it by that much."""
+    from tests.test_capture_frames import obstruction
+    from dartvision.capture import choose_frames
+
+    frames = (
+        [unattended_board(1, seed=i) for i in range(10)]
+        + [unattended_board(2, seed=40 + i) for i in range(10)]
+        + [obstruction(seed=300 + i) for i in range(10)]
+    )
+    kept, _, _, blocked = choose_frames(frames, SETTINGS)
+
+    assert blocked == 1 and len(kept) == 2
+    assert len(viewpoints(frames, SETTINGS, SETTINGS.analysis_fps)) == 1, (
+        "a body at the end of a recording is not a second session"
+    )
+
+
+def test_the_report_names_the_sessions_when_the_camera_moved():
+    def shifted(darts, seed):
+        return np.roll(unattended_board(darts, seed=seed), 55, axis=1)
+
+    frames = (
+        [unattended_board(1, seed=i) for i in range(10)]
+        + [unattended_board(2, seed=50 + i) for i in range(10)]
+        + [shifted(0, seed=500 + i) for i in range(10)]
+        + [shifted(1, seed=600 + i) for i in range(10)]
+    )
+    measured = scan(frames, SETTINGS)
+    text = render(measured, sweep(frames, SETTINGS), SETTINGS,
+                  viewpoints(frames, SETTINGS, SETTINGS.analysis_fps))
+
+    assert "2 viewpoints" in text and "2 sessions" in text

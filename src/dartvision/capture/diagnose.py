@@ -25,16 +25,21 @@ import numpy as np
 from dartvision.capture.frames import (
     ExtractionSettings,
     _analysis_frames,
+    changed_pixel_count,
     choose_frames,
     find_ffmpeg,
     frame_statistics,
 )
 
-__all__ = ["Scan", "scan", "scan_video", "sweep", "render"]
+__all__ = [
+    "Scan", "Viewpoint", "scan", "scan_video", "sweep", "viewpoints", "render",
+]
 
 # A change touching this share of the frame is not something *in* the scene --
-# nothing on a dartboard is a sixth of the picture. It is the camera moving.
-CAMERA_MOVE_FRACTION = 0.15
+# nothing on a dartboard is a sixth of the picture. Either the camera moved or
+# something walked through; which of those it was is a separate question, and
+# ``classify`` is what answers it.
+DISTURBANCE_FRACTION = 0.15
 
 
 @dataclass(frozen=True)
@@ -58,24 +63,86 @@ class Scan:
         """Which frames a given setting would call still."""
         return (self.means <= settings.still) & (self.changed <= settings.still_pixels)
 
-    def camera_moves(self) -> list[tuple[float, float]]:
-        """Time spans over which the camera itself was moving.
+    def disturbances(self) -> list[tuple[int, int]]:
+        """Frame spans over which most of the picture was changing.
 
-        Consecutive offending frames are one move, not many: a phone being
-        re-propped is a single event that happens to span a second of video.
+        Consecutive offending frames are one event, not many: a phone being
+        re-propped, or a player crossing the shot, is a single thing that
+        happens to span a second of video.
         """
-        moving = self.changed > self.pixels * CAMERA_MOVE_FRACTION
-        spans: list[tuple[float, float]] = []
+        big = self.changed > self.pixels * DISTURBANCE_FRACTION
+        spans: list[tuple[int, int]] = []
         start: int | None = None
-        for index, value in enumerate(moving):
+        for index, value in enumerate(big):
             if value and start is None:
                 start = index
             elif not value and start is not None:
-                spans.append((start / self.fps, (index - 1) / self.fps))
+                spans.append((start, index - 1))
                 start = None
         if start is not None:
-            spans.append((start / self.fps, (len(moving) - 1) / self.fps))
+            spans.append((start, len(big) - 1))
         return spans
+
+
+@dataclass(frozen=True)
+class Viewpoint:
+    """A stretch of video shot from one camera position.
+
+    The number that decides how footage may be used. Landmarks are annotated
+    once per session and a session is one fixed phone position, so a recording
+    containing three viewpoints is three sessions, and labelling it as one
+    puts wrong labels on two thirds of it.
+    """
+
+    start: float
+    end: float
+    states: int
+
+    def clock(self) -> str:
+        return f"{_clock(self.start)}-{_clock(self.end)}"
+
+
+def viewpoints(
+    frames: Sequence[np.ndarray], settings: ExtractionSettings, fps: float
+) -> list[Viewpoint]:
+    """Split the recording where the camera ended up pointing somewhere new.
+
+    Asked of the board states the extractor would keep, not of the raw
+    timeline, and that is the whole trick. A raw timeline marks the moment
+    something *started* changing, so comparing across one such moment always
+    finds a difference -- a body entering the shot looks exactly like a camera
+    being lifted, for the half-second it takes to happen. Consecutive settled
+    states cannot be confused that way: whatever crossed the shot has gone by
+    the time the next one is measured, and only a genuine move survives to be
+    seen from one to the next.
+
+    The floor is real and worth stating: a shift of a few pixels moves about as
+    many pixels as pulling three darts does, so this finds a phone that was
+    picked up and put down, not a phone that was knocked. Telling a nudge from a
+    dart needs the board *located*, which is the model's job and not this one's.
+    """
+    kept, _, _, _ = choose_frames(frames, settings)
+    if not kept:
+        return []
+
+    budget = settings.obstruction_fraction * np.asarray(frames[0]).size
+    bounds = [
+        index
+        for previous, index in zip(kept, kept[1:])
+        if changed_pixel_count(frames[previous], frames[index],
+                               settings.change_level) > budget
+    ]
+
+    found: list[Viewpoint] = []
+    segment: list[int] = []
+    for index in kept:
+        if index in bounds and segment:
+            found.append(Viewpoint(segment[0] / fps, segment[-1] / fps, len(segment)))
+            segment = []
+        segment.append(index)
+    if segment:
+        found.append(Viewpoint(segment[0] / fps, segment[-1] / fps, len(segment)))
+    return found
 
 
 def scan(frames: Sequence[np.ndarray], settings: ExtractionSettings) -> Scan:
@@ -137,7 +204,12 @@ def _clock(seconds: float) -> str:
     return f"{int(seconds) // 60}:{seconds % 60:04.1f}"
 
 
-def render(scan: Scan, rows: Sequence[dict[str, object]], settings: ExtractionSettings) -> str:
+def render(
+    scan: Scan,
+    rows: Sequence[dict[str, object]],
+    settings: ExtractionSettings,
+    views: Sequence[Viewpoint] = (),
+) -> str:
     """The report, as text a person reads and then changes one number."""
     lines = [
         f"scanned {scan.frames_read} frames at {scan.fps:g} fps "
@@ -167,20 +239,40 @@ def render(scan: Scan, rows: Sequence[dict[str, object]], settings: ExtractionSe
         f"{100 * settled.mean():.0f}% of frames count as unchanged",
     ]
 
-    moves = scan.camera_moves()
-    if moves:
-        shown = ", ".join(f"{_clock(a)}-{_clock(b)}" for a, b in moves[:8])
-        more = f" and {len(moves) - 8} more" if len(moves) > 8 else ""
+    crossings = len(scan.disturbances())
+    lines += [
+        "",
+        f"movement across the shot: {crossings} time(s)",
+        "  Walking up to the board, pulling darts, an arm following through. "
+        "Expected, and not a problem;",
+        "  the frames holding it are dropped. What matters is whether the "
+        "camera itself ended up elsewhere:",
+        "",
+    ]
+
+    if len(views) <= 1:
         lines += [
-            "",
-            f"the camera itself moved {len(moves)} time(s): {shown}{more}",
-            "  Each move changes where the board sits in frame. Frames either "
-            "side of one are not the same viewpoint,",
-            "  and a still caught during one is unusable. A fixed mount removes "
-            "all of them.",
+            "one viewpoint throughout — the whole recording is a single "
+            "session, which is what you want",
+            "  This catches the phone being repositioned, not a nudge: a small "
+            "shift moves about as many",
+            "  pixels as pulling three darts does, and separating those needs "
+            "the board located, which is",
+            "  the model's job. Lock the mount; the annotator will show "
+            "landmarks drifting if it slipped.",
         ]
     else:
-        lines += ["", "the camera never moved — good, that is the whole game"]
+        lines += [f"{len(views)} viewpoints — the camera moved {len(views) - 1} "
+                  f"time(s), so this recording is {len(views)} sessions:"]
+        for number, view in enumerate(views, start=1):
+            lines.append(f"  {number:>2}. {view.clock():>15}   "
+                         f"{view.states:>3} board states")
+        lines += [
+            "  Landmarks are annotated once per session. Extract each stretch "
+            "to its own folder with",
+            "  --out .../session-01, -02 and so on, or the labels after the "
+            "first move are simply wrong.",
+        ]
 
     lines += ["", "what other settings would have given", "",
               "  still_pixels  hold for  runs  kept  blocked"]
