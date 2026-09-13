@@ -50,6 +50,11 @@ def build_parser() -> argparse.ArgumentParser:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--video", help="one recording")
     source.add_argument("--video-dir", help="a folder of recordings")
+    source.add_argument(
+        "--framing",
+        help="a still, or a folder of them, to measure the board's size in — "
+             "the one thing in the whole chain that cannot be fixed later",
+    )
 
     parser.add_argument("--out", help="parent directory; not needed with --diagnose")
     parser.add_argument(
@@ -116,6 +121,55 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
 
+def _report_framing(target: Path) -> int:
+    """What the double ring will be worth at the model's input.
+
+    Sampled across a session rather than measured once. The camera does not
+    move within one -- that is what makes it a session -- so the stills agree,
+    and where they do not the spread is itself the answer.
+    """
+    from dartvision.capture.framing import measure_image
+    from dartvision.model.spec import MIN_RING_PX
+
+    if target.is_dir():
+        stills = sorted(target.glob("*.jpg"))[:5]
+        if not stills:
+            raise FileNotFoundError(f"no .jpg stills in {target}")
+    else:
+        stills = [target]
+
+    measured = [measure_image(still) for still in stills]
+    first = measured[0]
+    across = sum(m.ring_across for m in measured) / len(measured)
+    down = sum(m.ring_down for m in measured) / len(measured)
+    squared = sum(m.ring_squared for m in measured) / len(measured)
+
+    print(f"measured {len(stills)} still(s) from {target}")
+    print(f"  frame            {first.source[0]} x {first.source[1]}")
+    print(f"  board fills      {100 * first.fills:.0f}% of the frame's width")
+    print()
+    print("  the 10 mm double ring lands on, at the model's input:")
+    print(f"    across         {across:5.1f} px")
+    print(f"    down           {down:5.1f} px")
+    print(f"    if squared up  {squared:5.1f} px   (cropping square around the "
+          "board, which needs no re-shoot)")
+    print(f"  it needs         {MIN_RING_PX:5.1f} px")
+    print()
+
+    worst = min(across, down)
+    if worst >= MIN_RING_PX:
+        print("  Good. The precision the model needs is present in these images.")
+    elif squared >= MIN_RING_PX <= max(across, down):
+        print("  Short as shot, but a square crop around the board recovers it — "
+              "that is a change to\n  the training pipeline, not to how you "
+              "record. Keep this footage.")
+    else:
+        print("  Too small. Nothing downstream recovers this: the ring is not in "
+              "the image to be found.\n  Move closer until the board fills "
+              "roughly 60% of the frame's width.")
+    return 0
+
+
 def _run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
 
     settings = ExtractionSettings(
@@ -126,6 +180,9 @@ def _run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         obstruction_fraction=args.obstruction_fraction,
         analysis_fps=args.analysis_fps,
     )
+
+    if args.framing:
+        return _report_framing(Path(args.framing))
 
     if args.diagnose:
         if not args.video:

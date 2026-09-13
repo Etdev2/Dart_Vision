@@ -111,7 +111,22 @@ ring lands here:
 | filling a portrait frame's width | 21.5 px | 6.6 px |
 | filling a **square** frame | 21.5 px | 11.8 px |
 
-Against a floor of 10 px (`model.spec.MIN_RING_PX`). Two things follow. **Fill
+Against a floor of 10 px (`model.spec.MIN_RING_PX`). Measure it rather than
+estimate it — eyeballing a board's share of a frame is unreliable enough that a
+first reading off one photograph came out nearly twice the truth:
+
+```bash
+./capture --framing data/captures/garage/img_0632-01
+```
+
+It finds the board with no landmarks and no model, from the one thing reliably
+true of a photograph of a dartboard: it is much the darkest large object in the
+frame, and it is round. Both halves are needed — a ceiling is darker than a wall
+and bigger than a board, and shape is what settles it. The estimate is crude on
+purpose and scores nothing; it only has to separate a ring landing on four
+pixels from one landing on twelve.
+
+Two things follow. **Fill
 the frame with the board** — it is the single largest factor, worth a factor of
 two. And **the portrait-to-square stretch costs more than framing can recover**:
 even a perfectly framed portrait video lands at 6.6 px. Shoot so the board fills
