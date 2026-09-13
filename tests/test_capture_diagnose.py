@@ -245,3 +245,38 @@ def test_nothing_is_flagged_when_every_split_is_decisive():
     text = render(scan(unattended_visit(), SETTINGS), [], SETTINGS, views)
 
     assert "under 2x the line" not in text
+
+
+def test_the_report_shows_how_dart_sized_changes_compare_to_the_line():
+    """The measurement that decides whether a split is real. A dart landing
+    should sit far below the line and a camera move far above it; a recording
+    whose largest jump is barely over contains no camera moves at all."""
+    from dartvision.capture.frames import choose_frames, state_jumps
+
+    frames = unattended_visit()
+    kept, _, _, _ = choose_frames(frames, SETTINGS)
+    jumps = state_jumps(frames, kept, SETTINGS)
+    text = render(scan(frames, SETTINGS), [], SETTINGS, [], jumps)
+
+    assert "change between one board state and the next" in text
+    assert "largest" in text
+
+
+def test_a_dart_sized_jump_is_far_below_the_line():
+    from dartvision.capture.frames import choose_frames, state_jumps
+
+    frames = unattended_visit()
+    kept, _, _, _ = choose_frames(frames, SETTINGS)
+    jumps = state_jumps(frames, kept, SETTINGS)
+    budget = SETTINGS.obstruction_fraction * frames[0].size
+
+    assert len(jumps) == len(kept) - 1
+    assert jumps.max() < budget / 2, (
+        "darts landing must not approach the line that splits a session"
+    )
+
+
+def test_the_report_works_without_any_jumps():
+    """A recording yielding one state has nothing to compare."""
+    text = render(scan(unattended_visit(), SETTINGS), [], SETTINGS, [], None)
+    assert "change between one board state and the next" not in text

@@ -18,6 +18,7 @@ import argparse
 from pathlib import Path
 
 from dartvision.capture.diagnose import render, scan_video, sweep, viewpoints
+from dartvision.capture.frames import choose_frames, state_jumps
 from dartvision.capture.frames import (
     Extraction,
     ExtractionSettings,
@@ -110,7 +111,9 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--diagnose reads one video; pass --video")
         measured, frames = scan_video(args.video, settings)
         views = viewpoints(frames, settings, measured.fps)
-        print(render(measured, sweep(frames, settings), settings, views))
+        kept, _, _, _ = choose_frames(frames, settings)
+        print(render(measured, sweep(frames, settings), settings, views,
+                     state_jumps(frames, kept, settings)))
         return 0
 
     if not args.out:

@@ -28,6 +28,7 @@ from dartvision.capture.frames import (
     choose_frames,
     find_ffmpeg,
     frame_statistics,
+    state_jumps,
     viewpoint_splits,
 )
 
@@ -200,8 +201,10 @@ def render(
     rows: Sequence[dict[str, object]],
     settings: ExtractionSettings,
     views: Sequence[Viewpoint] = (),
+    jumps: np.ndarray | None = None,
 ) -> str:
     """The report, as text a person reads and then changes one number."""
+    jumps = np.asarray([] if jumps is None else jumps)
     lines = [
         f"scanned {scan.frames_read} frames at {scan.fps:g} fps "
         f"(~{scan.seconds / 60:.1f} minutes), {scan.pixels:,} pixels each",
@@ -278,6 +281,23 @@ def render(
                 "  Raise --obstruction-fraction until they stop and the rest "
                 "survive.",
             ]
+
+    if len(jumps):
+        budget = settings.obstruction_fraction * scan.pixels
+        percentiles = np.percentile(jumps, [50, 90, 99])
+        lines += [
+            "",
+            "change between one board state and the next, against the line "
+            f"that splits a session ({budget:,.0f} px)",
+            f"  median {percentiles[0] / budget:5.2f}x   "
+            f"90th {percentiles[1] / budget:5.2f}x   "
+            f"99th {percentiles[2] / budget:5.2f}x   "
+            f"largest {jumps.max() / budget:5.2f}x",
+            "  A dart landing should sit far below the line and a camera move "
+            "far above it. If the largest",
+            "  is barely over, nothing here is a camera move — the line is "
+            "just low for how this was framed.",
+        ]
 
     lines += ["", "what other settings would have given", "",
               "  still_pixels  hold for  runs  kept  blocked"]

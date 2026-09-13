@@ -72,6 +72,7 @@ __all__ = [
     "obstructed",
     "viewpoint_groups",
     "viewpoint_splits",
+    "state_jumps",
     "choose_frames",
     "find_ffmpeg",
     "extract",
@@ -349,6 +350,26 @@ def viewpoint_groups(
         return []
 
     return [group for group, _ in viewpoint_splits(frames, kept, settings)]
+
+
+def state_jumps(
+    frames: Sequence[np.ndarray],
+    kept: Sequence[int],
+    settings: ExtractionSettings | None = None,
+) -> np.ndarray:
+    """How much changed between each consecutive pair of board states.
+
+    The quantity every viewpoint decision rests on, exposed on its own because
+    the threshold applied to it is a fixed share of the frame and the thing it
+    measures is not. A dart is a share of the *board*, so filling more of the
+    frame with the board -- which is what the precision budget asks for --
+    moves a dart closer to a line meant to sit far above it.
+    """
+    settings = settings or ExtractionSettings()
+    return np.array([
+        changed_pixel_count(frames[before], frames[after], settings.change_level)
+        for before, after in zip(kept, kept[1:])
+    ], dtype=np.int64)
 
 
 def viewpoint_splits(
