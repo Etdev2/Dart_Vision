@@ -37,6 +37,7 @@ __all__ = [
     "dark_threshold",
     "largest_dark_region",
     "measure_image",
+    "draw_box",
 ]
 
 # The board's full outer diameter, number ring included, because that is the
@@ -65,6 +66,28 @@ class Framing:
     def fills(self) -> float:
         """Share of the frame's width the board spans."""
         return self.board[0] / self.source[0]
+
+    @property
+    def aspect(self) -> float:
+        """Height over width of what was measured. A board is close to 1."""
+        return self.board[1] / max(self.board[0], 1)
+
+    @property
+    def suspect(self) -> bool:
+        """Whether what was found is the wrong shape to be a dartboard.
+
+        A board photographed from any angle anyone throws from stays roughly as
+        wide as it is tall. A measurement far outside that did not find a
+        board: most often the board's dark pixels have merged with something
+        dark touching it -- the box many boards are mounted against, a shadow,
+        a doorway -- and the bounding box then spans both.
+
+        Reported rather than corrected. Separating two dark things that touch
+        needs to know where the board is, which is the question being asked;
+        what this can do honestly is say that the answer looks wrong, show the
+        box it drew, and take a measurement by hand instead.
+        """
+        return not 0.6 <= self.aspect <= 1.6
 
     @property
     def verdict(self) -> str:
@@ -119,19 +142,32 @@ def dark_threshold(grey: np.ndarray) -> int:
     return min(first, otsu_threshold(below))
 
 
-def _roundness(area: int, width: int, height: int) -> float:
-    """How disc-like a region is, from its area against its bounding box.
+# How much of its bounding box a dartboard's dark pixels cover. Not a disc's
+# pi/4: a board is black *segments*, and the cream ones between them are not
+# dark at all. The dark part is the outer ring, the numbers ring and half the
+# sectors -- roughly 0.4 to 0.6 of the box -- where a wall, a ceiling band or a
+# doorway covers essentially all of theirs. The first version of this measure
+# assumed a filled disc, was tested against a fixture that was one, and scored
+# a real board as though it were barely round at all.
+BOARD_FILL = (0.25, 0.9)
 
-    A circle fills pi/4 of the box that contains it; a wall, a ceiling band or
-    a doorway fills close to all of it. The measure is the whole reason a
-    ceiling cannot win: it is not a question of which dark thing is biggest but
-    of which dark thing is *shaped like a dartboard*.
+
+def _plausible(area: int, width: int, height: int) -> float:
+    """How much a region looks like a board, rather than a wall or a band.
+
+    Two things, and neither alone is enough. Squareness *squared*, because a
+    board seen from an angle is an ellipse but never a 3:1 band, and a linear
+    penalty left a band with four times the pixels still winning. And a fill
+    inside the range a ring pattern produces: something covering all of its box
+    is a flat surface, and something covering almost none of it is a wire.
     """
     box = width * height
     if box <= 0:
         return 0.0
-    circle = np.pi / 4
-    return float(max(0.0, 1.0 - abs(area / box - circle) / circle))
+    squareness = min(width, height) / max(width, height)
+    fill = area / box
+    inside = BOARD_FILL[0] <= fill <= BOARD_FILL[1]
+    return squareness ** 2 * (1.0 if inside else 0.25)
 
 
 def largest_dark_region(grey: np.ndarray, threshold: int) -> tuple[int, int, int, int]:
@@ -171,11 +207,7 @@ def largest_dark_region(grey: np.ndarray, threshold: int) -> tuple[int, int, int
                         seen[ny, nx] = True
                         stack.append((ny, nx))
         box_w, box_h = right - left + 1, bottom - top + 1
-        # Squareness allows for a board seen at an angle, which is an ellipse
-        # and not a circle -- a shot oblique enough to halve one axis is still
-        # a usable shot, and one flat enough to be a band is not a board.
-        squareness = min(box_w, box_h) / max(box_w, box_h)
-        score = size * squareness * _roundness(size, box_w, box_h)
+        score = size * _plausible(size, box_w, box_h)
         if score > best[0]:
             best = (score, (left, top, right, bottom))
     return best[1]
@@ -205,22 +237,71 @@ def _decode(image: Path, width: int, ffmpeg: str) -> tuple[np.ndarray, tuple[int
     return grey, source
 
 
+def draw_box(
+    image: Path, box: tuple[int, int, int, int], destination: Path,
+    ffmpeg: str | None = None,
+) -> Path:
+    """Write a copy of ``image`` with ``box`` drawn on it.
+
+    So the measurement can be checked rather than believed. Everything else
+    here is an estimate made from an assumption about what a photograph of a
+    dartboard looks like, and the cheapest way to find out whether the
+    assumption held on a particular photograph is to look.
+    """
+    from dartvision.capture.frames import find_ffmpeg
+
+    left, top, right, bottom = box
+    result = subprocess.run(
+        [ffmpeg or find_ffmpeg(), "-y", "-i", str(image),
+         "-vf", f"drawbox=x={left}:y={top}:w={right - left}:h={bottom - top}"
+                ":color=red@0.9:t=6",
+         "-frames:v", "1", str(destination)],
+        capture_output=True, check=False,
+    )
+    if result.returncode != 0 or not destination.exists():
+        detail = result.stderr.decode("utf-8", "replace").strip().splitlines()
+        raise RuntimeError(
+            "ffmpeg could not draw the check image:\n"
+            + (detail[-1] if detail else "no output")
+        )
+    return destination
+
+
 def measure_image(
     image: str | Path,
     input_px: int = DEFAULT_INPUT_PX,
     ffmpeg: str | None = None,
+    board_width: int | None = None,
+    check_into: Path | None = None,
 ) -> Framing:
-    """Estimate what one still leaves the model to work with."""
+    """Estimate what one still leaves the model to work with.
+
+    ``board_width`` overrides the measurement with one taken by hand, for the
+    photographs where the detection is defeated -- a board mounted against
+    something dark, most often. The height is taken to match, since a board is
+    round.
+    """
     from dartvision.capture.frames import find_ffmpeg
 
     image = Path(image)
     if not image.exists():
         raise FileNotFoundError(f"there is no file at {image}")
-    grey, source = _decode(image, MEASURE_WIDTH, ffmpeg or find_ffmpeg())
+    ffmpeg = ffmpeg or find_ffmpeg()
+    grey, source = _decode(image, MEASURE_WIDTH, ffmpeg)
 
     left, top, right, bottom = largest_dark_region(grey, dark_threshold(grey))
     scale = source[0] / grey.shape[1]
     board = (round((right - left + 1) * scale), round((bottom - top + 1) * scale))
+
+    if check_into is not None:
+        draw_box(
+            image,
+            (round(left * scale), round(top * scale),
+             round((right + 1) * scale), round((bottom + 1) * scale)),
+            check_into, ffmpeg,
+        )
+    if board_width is not None:
+        board = (board_width, board_width)
 
     # The model resizes the whole frame onto a square, so each axis is scaled
     # by its own factor -- which is why a portrait recording loses far more

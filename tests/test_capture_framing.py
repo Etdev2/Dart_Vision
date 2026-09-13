@@ -41,6 +41,44 @@ def room(diameter: int, centre=(900, 520), ceiling: int = 150) -> np.ndarray:
     return frame
 
 
+def dartboard_room(diameter: int, centre=(900, 540), doorway=True,
+                   box_above=False) -> np.ndarray:
+    """The scene as photographed, not as imagined.
+
+    A dartboard is *segments*: a black outer ring and numbers ring, with
+    alternating black and cream sectors inside. Its dark pixels cover about
+    half its bounding box, not the pi/4 a filled disc covers -- and the first
+    version of this measure assumed a disc, was tested against a fixture that
+    was one, and so never noticed.
+
+    The distractors are the ones a garage actually contains: a ceiling band
+    darker than the wall and larger than the board, and a tall dark doorway
+    beside it. On real footage those between them produced a measurement
+    exactly twice as tall as it was wide, which no dartboard is.
+    """
+    frame = np.full((HEIGHT, WIDTH), 225, dtype=np.uint8)
+    frame[:400, :] = 150                       # ceiling: darker, and bigger
+    if doorway:
+        frame[1500:1900, 30:200] = 70          # doorway: tall, dark, well clear
+    if box_above:
+        # The case that defeats it, and the one most boards present: a dark box
+        # mounted directly behind and above the board, touching it.
+        top = int(centre[0] - diameter / 2)
+        frame[top - 320:top + 20, centre[1] - 190:centre[1] + 190] = 50
+
+    ys, xs = np.ogrid[:HEIGHT, :WIDTH]
+    radius = diameter / 2
+    distance = np.sqrt((ys - centre[0]) ** 2 + (xs - centre[1]) ** 2)
+    angle = np.arctan2(ys - centre[0], xs - centre[1])
+
+    board = distance <= radius
+    frame[board] = 215                         # cream sectors
+    sector = (((angle + np.pi) / (2 * np.pi) * 20).astype(int) % 2 == 0)
+    frame[board & sector] = 40                 # black sectors
+    frame[board & (distance > radius * 0.88)] = 35   # outer and numbers ring
+    return frame
+
+
 def write(frame: np.ndarray, path) -> None:
     result = subprocess.run(
         ["ffmpeg", "-y", "-f", "rawvideo", "-pix_fmt", "gray",
@@ -179,3 +217,93 @@ def test_a_folder_with_no_stills_is_a_sentence(tmp_path, capsys):
 
     assert cli.main(["--framing", str(tmp_path)]) == 1
     assert "no .jpg stills" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------
+# The board as it actually photographs: segments, not a disc
+# --------------------------------------------------------------------------
+
+def test_a_segmented_board_covers_far_less_of_its_box_than_a_disc():
+    """The measurement behind the fix, so the assumption cannot come back."""
+    frame = dartboard_room(490)
+    dark = frame <= dark_threshold(frame)
+
+    left, top, right, bottom = largest_dark_region(frame, dark_threshold(frame))
+    box = (right - left + 1) * (bottom - top + 1)
+    inside = dark[top:bottom + 1, left:right + 1].sum()
+
+    assert inside / box < np.pi / 4 * 0.95, (
+        "a real board's dark pixels do not fill a disc's share of its box"
+    )
+
+
+def test_the_board_is_found_beside_a_ceiling_and_a_doorway(tmp_path):
+    """The two distractors that beat the first implementation, together."""
+    image = tmp_path / "still.png"
+    write(dartboard_room(490), image)
+
+    measured = measure_image(image)
+
+    assert abs(measured.board[0] - 490) / 490 < 0.10
+    assert not measured.suspect
+    assert 0.75 < measured.aspect < 1.35
+
+
+def test_a_board_mounted_against_a_dark_box_is_reported_not_guessed(tmp_path):
+    """The real failure: most boards hang against something, and dark pixels
+    that touch are one region. It cannot be separated without knowing where the
+    board is, which is the question — so it is declared rather than fudged."""
+    image = tmp_path / "still.png"
+    write(dartboard_room(490, box_above=True), image)
+
+    measured = measure_image(image)
+
+    assert measured.suspect, "a region far taller than wide is not a dartboard"
+    assert measured.aspect > 1.6
+
+
+def test_the_command_line_refuses_a_suspect_measurement(tmp_path, capsys):
+    from dartvision.capture import __main__ as cli
+
+    write(dartboard_room(490, box_above=True), tmp_path / "frame-0001.jpg")
+
+    assert cli.main(["--framing", str(tmp_path)]) == 1
+    printed = capsys.readouterr().out
+
+    assert "is not" in printed and "--board-width" in printed
+    assert "Everything above is wrong until you do" in printed
+    assert (tmp_path / "framing-check.jpg").exists()
+
+
+def test_a_hand_measurement_overrides_the_detection(tmp_path, capsys):
+    from dartvision.capture import __main__ as cli
+
+    write(dartboard_room(490, box_above=True), tmp_path / "frame-0001.jpg")
+
+    assert cli.main(["--framing", str(tmp_path), "--board-width", "700"]) == 0
+    assert "65% of the frame's width" in capsys.readouterr().out
+
+
+def test_every_measurement_leaves_a_picture_of_what_it_found(tmp_path):
+    """Everything here rests on an assumption about what a photograph of a
+    dartboard looks like. The cheapest way to check it held is to look."""
+    from dartvision.capture.framing import draw_box
+
+    image = tmp_path / "still.png"
+    write(dartboard_room(490), image)
+    check = tmp_path / "framing-check.jpg"
+
+    measure_image(image, check_into=check)
+
+    assert check.exists() and check.stat().st_size > 0
+    assert draw_box(image, (10, 10, 200, 200), tmp_path / "other.jpg").exists()
+
+
+@pytest.mark.parametrize("diameter", [360, 490, 680])
+def test_a_segmented_board_measures_true_at_several_sizes(diameter, tmp_path):
+    image = tmp_path / "still.png"
+    write(dartboard_room(diameter, centre=(900, 540)), image)
+
+    measured = measure_image(image)
+
+    assert abs(measured.board[0] - diameter) / diameter < 0.10

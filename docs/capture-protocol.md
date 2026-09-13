@@ -121,10 +121,21 @@ first reading off one photograph came out nearly twice the truth:
 
 It finds the board with no landmarks and no model, from the one thing reliably
 true of a photograph of a dartboard: it is much the darkest large object in the
-frame, and it is round. Both halves are needed — a ceiling is darker than a wall
-and bigger than a board, and shape is what settles it. The estimate is crude on
-purpose and scores nothing; it only has to separate a ring landing on four
-pixels from one landing on twelve.
+frame, and it is roughly as wide as it is tall. The estimate is crude on purpose
+and scores nothing; it only has to separate a ring landing on four pixels from
+one landing on twelve.
+
+**It writes `framing-check.jpg` beside the stills with a red box around what it
+measured. Look at it.** Every number above rests on an assumption about what a
+photograph of a dartboard looks like, and one photograph is the cheapest way to
+find out whether the assumption held on yours.
+
+The assumption fails in one common case, and the tool says so rather than
+guessing: **a board mounted against something dark that touches it** — the box
+many boards hang on — is one dark region with the board, and the measurement
+then spans both. A result far taller than wide is refused outright with that
+explanation. Measure the board's width in the image by hand and pass
+`--board-width`; the report is then exact.
 
 Two things follow. **Fill
 the frame with the board** — it is the single largest factor, worth a factor of

@@ -91,6 +91,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="pixels that must change before two stills count as different states",
     )
     parser.add_argument(
+        "--board-width", type=int,
+        help="the board's width in pixels, measured by hand, for photographs "
+             "where the automatic measurement is defeated",
+    )
+    parser.add_argument(
         "--overwrite", action="store_true",
         help="replace session folders left by an earlier extraction of the same "
              "recording, instead of refusing to write beside them",
@@ -121,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
 
-def _report_framing(target: Path) -> int:
+def _report_framing(target: Path, board_width: int | None = None) -> int:
     """What the double ring will be worth at the model's input.
 
     Sampled across a session rather than measured once. The camera does not
@@ -138,7 +143,12 @@ def _report_framing(target: Path) -> int:
     else:
         stills = [target]
 
-    measured = [measure_image(still) for still in stills]
+    check = (target if target.is_dir() else target.parent) / "framing-check.jpg"
+    measured = [
+        measure_image(still, board_width=board_width,
+                      check_into=check if index == 0 else None)
+        for index, still in enumerate(stills)
+    ]
     first = measured[0]
     across = sum(m.ring_across for m in measured) / len(measured)
     down = sum(m.ring_down for m in measured) / len(measured)
@@ -156,10 +166,27 @@ def _report_framing(target: Path) -> int:
     print(f"  it needs         {MIN_RING_PX:5.1f} px")
     print()
 
+    if first.suspect and board_width is None:
+        print(f"  What was measured is {first.aspect:.1f} times as tall as it "
+              "is wide, and a dartboard is not.")
+        print("  Almost certainly the board's dark pixels have merged with "
+              "something dark touching it —")
+        print("  the box many boards are mounted against, a shadow, a doorway. "
+              "Look at")
+        print(f"    {check}")
+        print("  and if the red box is not the board, measure its width in "
+              "pixels yourself and pass")
+        print("  --board-width. Everything above is wrong until you do.")
+        return 1
+
+    if board_width is None:
+        print(f"  Check the red box is the board: {check}")
+        print()
+
     worst = min(across, down)
     if worst >= MIN_RING_PX:
         print("  Good. The precision the model needs is present in these images.")
-    elif squared >= MIN_RING_PX <= max(across, down):
+    elif squared >= MIN_RING_PX:
         print("  Short as shot, but a square crop around the board recovers it — "
               "that is a change to\n  the training pipeline, not to how you "
               "record. Keep this footage.")
@@ -182,7 +209,7 @@ def _run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     )
 
     if args.framing:
-        return _report_framing(Path(args.framing))
+        return _report_framing(Path(args.framing), args.board_width)
 
     if args.diagnose:
         if not args.video:
