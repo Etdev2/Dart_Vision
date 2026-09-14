@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-300.0 -352.0 600.0 694.0" width="640" height="740" font-family="ui-sans-serif, system-ui, sans-serif">
+<rect x="-300.0" y="-352.0" width="600.0" height="694.0" fill="#faf9f6"/>
+<circle cx="0" cy="0" r="225.5" fill="#1c1917"/>
+<circle cx="0" cy="0" r="170.0" fill="#efe7d2"/>
+<text x="0.0" y="-190.5" fill="#f5f5f4" font-size="17" text-anchor="middle">20</text>
+<path d="M 0 0 L 26.59 -167.91 A 170.0 170.0 0 0 1 77.18 -151.47 Z" fill="#2b2622"/>
+<text x="61.0" y="-180.8" fill="#f5f5f4" font-size="17" text-anchor="middle">1</text>
+<text x="116.1" y="-152.8" fill="#f5f5f4" font-size="17" text-anchor="middle">18</text>
+<path d="M 0 0 L 120.21 -120.21 A 170.0 170.0 0 0 1 151.47 -77.18 Z" fill="#2b2622"/>
+<text x="159.8" y="-109.1" fill="#f5f5f4" font-size="17" text-anchor="middle">4</text>
+<text x="187.8" y="-54.0" fill="#f5f5f4" font-size="17" text-anchor="middle">13</text>
+<path d="M 0 0 L 167.91 -26.59 A 170.0 170.0 0 0 1 167.91 26.59 Z" fill="#2b2622"/>
+<text x="197.5" y="7.0" fill="#f5f5f4" font-size="17" text-anchor="middle">6</text>
+<text x="187.8" y="68.0" fill="#f5f5f4" font-size="17" text-anchor="middle">10</text>
+<path d="M 0 0 L 151.47 77.18 A 170.0 170.0 0 0 1 120.21 120.21 Z" fill="#2b2622"/>
+<text x="159.8" y="123.1" fill="#f5f5f4" font-size="17" text-anchor="middle">15</text>
+<text x="116.1" y="166.8" fill="#f5f5f4" font-size="17" text-anchor="middle">2</text>
+<path d="M 0 0 L 77.18 151.47 A 170.0 170.0 0 0 1 26.59 167.91 Z" fill="#2b2622"/>
+<text x="61.0" y="194.8" fill="#f5f5f4" font-size="17" text-anchor="middle">17</text>
+<text x="0.0" y="204.5" fill="#f5f5f4" font-size="17" text-anchor="middle">3</text>
+<path d="M 0 0 L -26.59 167.91 A 170.0 170.0 0 0 1 -77.18 151.47 Z" fill="#2b2622"/>
+<text x="-61.0" y="194.8" fill="#f5f5f4" font-size="17" text-anchor="middle">19</text>
+<text x="-116.1" y="166.8" fill="#f5f5f4" font-size="17" text-anchor="middle">7</text>
+<path d="M 0 0 L -120.21 120.21 A 170.0 170.0 0 0 1 -151.47 77.18 Z" fill="#2b2622"/>
+<text x="-159.8" y="123.1" fill="#f5f5f4" font-size="17" text-anchor="middle">16</text>
+<text x="-187.8" y="68.0" fill="#f5f5f4" font-size="17" text-anchor="middle">8</text>
+<path d="M 0 0 L -167.91 26.59 A 170.0 170.0 0 0 1 -167.91 -26.59 Z" fill="#2b2622"/>
+<text x="-197.5" y="7.0" fill="#f5f5f4" font-size="17" text-anchor="middle">11</text>
+<text x="-187.8" y="-54.0" fill="#f5f5f4" font-size="17" text-anchor="middle">14</text>
+<path d="M 0 0 L -151.47 -77.18 A 170.0 170.0 0 0 1 -120.21 -120.21 Z" fill="#2b2622"/>
+<text x="-159.8" y="-109.1" fill="#f5f5f4" font-size="17" text-anchor="middle">9</text>
+<text x="-116.1" y="-152.8" fill="#f5f5f4" font-size="17" text-anchor="middle">12</text>
+<path d="M 0 0 L -77.18 -151.47 A 170.0 170.0 0 0 1 -26.59 -167.91 Z" fill="#2b2622"/>
+<text x="-61.0" y="-180.8" fill="#f5f5f4" font-size="17" text-anchor="middle">5</text>
+<circle cx="0" cy="0" r="170.0" fill="none" stroke="#a8a29e" stroke-width="2.4"/>
+<circle cx="0" cy="0" r="107.4" fill="none" stroke="#a8a29e" stroke-width="2.4"/>
+<circle cx="0" cy="0" r="160.0" fill="none" stroke="#a8a29e" stroke-width="1.2"/>
+<circle cx="0" cy="0" r="97.4" fill="none" stroke="#a8a29e" stroke-width="1.2"/>
+<circle cx="0" cy="0" r="15.9" fill="none" stroke="#a8a29e" stroke-width="1.2"/>
+<circle cx="0" cy="0" r="6.35" fill="none" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="-2.49" y1="-15.70" x2="-26.59" y2="-167.91" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="2.49" y1="-15.70" x2="26.59" y2="-167.91" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="7.22" y1="-14.17" x2="77.18" y2="-151.47" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="11.24" y1="-11.24" x2="120.21" y2="-120.21" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="14.17" y1="-7.22" x2="151.47" y2="-77.18" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="15.70" y1="-2.49" x2="167.91" y2="-26.59" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="15.70" y1="2.49" x2="167.91" y2="26.59" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="14.17" y1="7.22" x2="151.47" y2="77.18" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="11.24" y1="11.24" x2="120.21" y2="120.21" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="7.22" y1="14.17" x2="77.18" y2="151.47" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="2.49" y1="15.70" x2="26.59" y2="167.91" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="-2.49" y1="15.70" x2="-26.59" y2="167.91" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="-7.22" y1="14.17" x2="-77.18" y2="151.47" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="-11.24" y1="11.24" x2="-120.21" y2="120.21" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="-14.17" y1="7.22" x2="-151.47" y2="77.18" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="-15.70" y1="2.49" x2="-167.91" y2="26.59" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="-15.70" y1="-2.49" x2="-167.91" y2="-26.59" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="-14.17" y1="-7.22" x2="-151.47" y2="-77.18" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="-11.24" y1="-11.24" x2="-120.21" y2="-120.21" stroke="#a8a29e" stroke-width="1.2"/>
+<line x1="-7.22" y1="-14.17" x2="-77.18" y2="-151.47" stroke="#a8a29e" stroke-width="1.2"/>
+<circle class="landmark" cx="167.91" cy="-26.59" r="7" fill="#dc2626" stroke="#fff" stroke-width="2.5"/>
+<text x="194.8" y="-24.8" fill="#dc2626" font-size="19" font-weight="700" text-anchor="middle">1</text>
+<circle class="landmark" cx="-26.59" cy="-167.91" r="7" fill="#dc2626" stroke="#fff" stroke-width="2.5"/>
+<text x="-30.8" y="-188.8" fill="#dc2626" font-size="19" font-weight="700" text-anchor="middle">2</text>
+<circle class="landmark" cx="-167.91" cy="26.59" r="7" fill="#dc2626" stroke="#fff" stroke-width="2.5"/>
+<text x="-194.8" y="36.8" fill="#dc2626" font-size="19" font-weight="700" text-anchor="middle">3</text>
+<circle class="landmark" cx="26.59" cy="167.91" r="7" fill="#dc2626" stroke="#fff" stroke-width="2.5"/>
+<text x="30.8" y="200.8" fill="#dc2626" font-size="19" font-weight="700" text-anchor="middle">4</text>
+<circle class="landmark" cx="106.08" cy="-16.80" r="7" fill="#2563eb" stroke="#fff" stroke-width="2.5"/>
+<text x="76.4" y="-6.1" fill="#2563eb" font-size="19" font-weight="700" text-anchor="middle">5</text>
+<circle class="landmark" cx="-16.80" cy="-106.08" r="7" fill="#2563eb" stroke="#fff" stroke-width="2.5"/>
+<text x="-12.1" y="-70.4" fill="#2563eb" font-size="19" font-weight="700" text-anchor="middle">6</text>
+<circle class="landmark" cx="-106.08" cy="16.80" r="7" fill="#2563eb" stroke="#fff" stroke-width="2.5"/>
+<text x="-76.4" y="18.1" fill="#2563eb" font-size="19" font-weight="700" text-anchor="middle">7</text>
+<circle class="landmark" cx="16.80" cy="106.08" r="7" fill="#2563eb" stroke="#fff" stroke-width="2.5"/>
+<text x="12.1" y="82.4" fill="#2563eb" font-size="19" font-weight="700" text-anchor="middle">8</text>
+<text x="240.0" y="-33.0" fill="#57534e" font-size="14" text-anchor="start">13 | 6</text>
+<text x="-38.0" y="-235.0" fill="#57534e" font-size="14" text-anchor="middle">20 | 5</text>
+<text x="-240.0" y="43.0" fill="#57534e" font-size="14" text-anchor="end">8 | 11</text>
+<text x="38.0" y="245.0" fill="#57534e" font-size="14" text-anchor="middle">17 | 3</text>
+<text x="0" y="-318.0" fill="#1c1917" font-size="24" font-weight="700" text-anchor="middle">The eight landmarks, in click order</text>
+<circle cx="-192" cy="-284.0" r="7" fill="#dc2626" stroke="#fff" stroke-width="2.5"/>
+<text x="-178" y="-278.0" fill="#dc2626" font-size="16" font-weight="600">1-4  outer edge of the DOUBLE ring (170 mm out)</text>
+<circle cx="-192" cy="-258.0" r="7" fill="#2563eb" stroke="#fff" stroke-width="2.5"/>
+<text x="-178" y="-252.0" fill="#2563eb" font-size="16" font-weight="600">5-8  outer edge of the TREBLE ring (107 mm out)</text>
+<text x="0" y="284.0" fill="#1c1917" font-size="17" text-anchor="middle">Each point is where a radial wire crosses a ring wire.</text>
+<text x="0" y="310.0" fill="#57534e" font-size="15" text-anchor="middle">The four wires are 90 degrees apart.</text>
+</svg>

@@ -315,6 +315,11 @@ Open `tools/annotator.html` in any browser — no install.
    `garage` / `garage/2026-01-14-a`.
 2. Load the session's images.
 3. Click the **8 landmarks once**. They apply to every frame in the session.
+   **[`docs/landmarks.svg`](landmarks.svg) shows exactly which points**, in click
+   order: four on the outer edge of the double ring, then four on the outer edge
+   of the treble ring, at the four radial wires that sit 90° apart (`13|6`,
+   `20|5`, `8|11`, `17|3`). Drawn from `geometry.board` rather than by hand, and
+   a test asserts the drawn points are the ones the annotator asks for.
 4. Switch to Tips. On the **last** frame of a visit, click the tips **in throw
    order**, then "Expand burst" back over the frames that preceded it.
 5. Export JSONL. It matches the same contract the synthetic generator emits, so

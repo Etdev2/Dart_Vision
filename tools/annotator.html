@@ -197,7 +197,7 @@ function renderPoints() {
     return `<li>${name} &mdash; ${p[0].toFixed(4)}, ${p[1].toFixed(4)}</li>`;
   }).join("");
   $("modeHelp").textContent = state.mode === "landmarks"
-    ? `Click the 8 wire intersections in order. Annotated once; applies to every frame in this session. Next: ${LANDMARK_NAMES[state.landmarks.length] || "done"}`
+    ? `Click the 8 wire intersections in order — see docs/landmarks.svg for which. Annotated once; applies to every frame in this session. Next: ${LANDMARK_NAMES[state.landmarks.length] || "done"}`
     : "Click up to 3 tips in throw order on the final frame of a visit.";
 }
 
