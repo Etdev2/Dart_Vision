@@ -369,6 +369,43 @@ the pixel, because the pixel is the unit the keys move in.
 The header shows clicks spent against clicks if every frame were labelled
 independently. That ratio is why this is a weekend rather than a month.
 
+## Letting the pixels place the tips
+
+Between two stills of a fixed camera the only thing that moved is the dart that
+just arrived. So the new dart is not something to detect in a picture — it is
+the difference between two pictures, which needs no model at all:
+
+```bash
+python -m dartvision.autolabel --session data/captures/t2/img_0658-01 \
+    --out data/captures/t2/img_0658-01/suggested.jsonl
+```
+
+Open that with the annotator's **resume**, click the eight landmarks, and
+correct the tips. Correcting is several times quicker than placing, which is the
+whole saving claimed — and the proposals are proposals, not labels.
+
+Which *end* of the dart is the tip is the part differencing cannot answer, and
+geometry looks like the answer and is not. The tip lies on the board plane and
+the flight stands off it, so a homography should throw the flight outward and
+leave the tip nearer the bull. Measured: at a typical mount that displacement is
+about 5 mm, while the dart's own lean moves the flight nearly 40 in whatever
+direction it happens to point. The pixels answer it instead — a flight is some
+35 mm across and a point about one, so the tip is the **thinner end**. A dart
+pointing at the camera has no thin end, and those are listed rather than
+guessed at.
+
+The same reading checks labels already placed:
+
+```bash
+python -m dartvision.autolabel --session data/captures/t2/img_0658-01 \
+    --against data/captures/t2/img_0658-01/manifest.jsonl
+```
+
+Disagreement is not proof the label is wrong — it is evidence that one of two
+independent readings is, which is worth a look. A different dart *count* is the
+line to read first: a point in the wrong place costs one dart, a miscounted
+visit costs the whole burst it expanded into.
+
 ## Sizing
 
 Start with **one setup and about 300 images** — roughly 75 visits, about 90
