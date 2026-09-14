@@ -48,14 +48,24 @@
   .hint { color:var(--muted); font-size:12px; }
   .warn { color:var(--tip); font-size:12px; font-weight:600; }
   hr { border:0; border-top:1px solid var(--line); margin:12px 0; }
+  /* Two file pickers side by side render as two identical "Choose File"
+     buttons, and the one that was labelled only in small grey text was
+     reported as not being there at all. Each now says what it takes. */
+  label.pick { display:inline-flex; align-items:center; gap:6px;
+               border:1px solid var(--line); border-radius:6px; padding:3px 8px;
+               background:var(--bg); }
+  label.pick > span { font-size:12px; font-weight:650; color:var(--accent);
+                      white-space:nowrap; }
 </style>
 
 <header>
   <h1>Dart Vision annotator</h1>
   <label>setup <input type="text" id="setup" value="garage" spellcheck="false"></label>
   <label>session <input type="text" id="session" value="garage/2026-01-01-a" spellcheck="false"></label>
-  <input type="file" id="load" accept="image/*" multiple>
-  <label class="hint" title="carry on from a manifest exported earlier">resume
+  <label class="pick"><span>images</span>
+    <input type="file" id="load" accept="image/*" multiple></label>
+  <label class="pick" title="carry on from a manifest exported earlier">
+    <span>or resume a manifest</span>
     <input type="file" id="resume" accept=".jsonl,application/x-ndjson"></label>
   <span class="hint" id="status">no images loaded</span>
   <button id="forget" title="delete the saved work for this session id">Discard saved</button>
