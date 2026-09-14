@@ -322,6 +322,16 @@ Open `tools/annotator.html` in any browser — no install.
    a test asserts the drawn points are the ones the annotator asks for.
 4. Switch to Tips. On the **last** frame of a visit, click the tips **in throw
    order**, then "Expand burst" back over the frames that preceded it.
+
+   Order matters in exactly one place, and this is it: expansion takes the
+   *first* k tips, so a visit clicked out of order puts the third dart on the
+   frame that held only the first. Everything downstream is order-blind —
+   evaluation pairs predictions to labels by nearest distance, not by index — so
+   a wrong order is a swap and not a reason to redo the visit. The up arrows in
+   the point list reorder them; expand again afterwards, which overwrites.
+
+   And the true order is in the frames themselves: the 1-dart frame *is* dart
+   one. Nothing has to be remembered.
 5. Export JSONL. It matches the same contract the synthetic generator emits, so
    real and synthetic data are interchangeable inputs to the same pipeline.
 

@@ -42,6 +42,9 @@
            pointer-events:none; background:var(--panel); }
   .row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
   ol { margin:6px 0; padding-left:20px; font-size:12.5px; }
+  ol li { margin:2px 0; }
+  button.swap { padding:0 6px; font-size:12px; line-height:1.5; margin-left:4px;
+                border-radius:4px; }
   .hint { color:var(--muted); font-size:12px; }
   .warn { color:var(--tip); font-size:12px; font-weight:600; }
   hr { border:0; border-top:1px solid var(--line); margin:12px 0; }
@@ -81,6 +84,7 @@
       <label class="hint">preceding frames <input type="text" id="burstBack" value="3" style="width:44px"></label>
       <button id="expand">Expand burst</button>
     </div>
+    <div class="hint" id="expandHint"></div>
     <div class="hint">Click the tips on the <em>last</em> frame of a visit in throw order, then expand backwards over the frames that preceded it.</div>
     <hr>
     <button id="export" class="primary">Export JSONL</button>
@@ -265,23 +269,48 @@ window.addEventListener("keydown", e => {
   nudge(moves[e.key][0] * step, moves[e.key][1] * step);
 });
 
+// Order matters in exactly one place: burst expansion takes the *first* k tips,
+// so a visit clicked out of throw order puts the third dart on the frame that
+// held only the first. Everything else is order-blind -- evaluation pairs
+// predictions to labels by nearest distance, not by index -- which is why this
+// is a swap rather than a reason to start the visit again.
+function currentList() {
+  const img = current();
+  return state.mode === "landmarks"
+    ? state.landmarks : (img ? state.tips[img.name] || [] : []);
+}
+
+function swapUp(index) {
+  const list = currentList();
+  if (index < 1 || index >= list.length) return;
+  [list[index - 1], list[index]] = [list[index], list[index - 1]];
+  draw(); renderFiles(); updateStatus();
+}
+
 function renderPoints() {
   const img = current();
-  const list = state.mode === "landmarks" ? state.landmarks : (img ? state.tips[img.name] || [] : []);
+  const list = currentList();
   $("points").innerHTML = list.map((p, i) => {
     const name = state.mode === "landmarks" ? (LANDMARK_NAMES[i] || "extra") : "tip " + (i + 1);
     // Shown in source pixels as well as fractions: a pixel is the unit the
     // arrow keys move in, so it is the unit worth reading back.
     const px = img ? ` &nbsp;(${Math.round(p[0] * img.w)}, ${Math.round(p[1] * img.h)} px)` : "";
     const last = i === list.length - 1 ? ' style="font-weight:650"' : "";
-    return `<li${last}>${name} &mdash; ${p[0].toFixed(4)}, ${p[1].toFixed(4)}${px}</li>`;
+    const up = i > 0
+      ? ` <button class="swap" data-index="${i}" title="swap with the one above">&uarr;</button>`
+      : "";
+    return `<li${last}>${name} &mdash; ${p[0].toFixed(4)}, ${p[1].toFixed(4)}${px}${up}</li>`;
   }).join("");
+  for (const button of $("points").querySelectorAll(".swap")) {
+    button.onclick = () => swapUp(parseInt(button.dataset.index, 10));
+  }
   const nudgeHint = list.length
     ? " Arrow keys move the last point one pixel, shift for five — the magnifier follows it."
     : "";
   $("modeHelp").textContent = (state.mode === "landmarks"
     ? `Click the 8 wire intersections in order — see docs/landmarks.svg for which. Annotated once; applies to every frame in this session. Next: ${LANDMARK_NAMES[state.landmarks.length] || "done"}`
-    : "Click up to 3 tips in throw order on the final frame of a visit.") + nudgeHint;
+    : "Click up to 3 tips in throw order on the final frame of a visit. Wrong order? "
+      + "Use the up arrows in the list, then expand again.") + nudgeHint;
 }
 
 for (const [id, mode] of [["modeLandmarks", "landmarks"], ["modeTips", "tips"]]) {
@@ -306,17 +335,48 @@ $("clear").onclick = () => {
   draw(); renderFiles(); updateStatus();
 };
 
+// Every path out of here says what happened. Expanding writes to frames the
+// reader is not looking at, so with no message a refusal and a success are the
+// same event: nothing visibly changes on screen either way.
+function expandHint(text, bad) {
+  const box = $("expandHint");
+  box.textContent = text;
+  box.className = bad ? "warn" : "hint";
+}
+
 $("expand").onclick = () => {
-  const img = current(); if (!img) return;
+  const img = current();
+  if (!img) return expandHint("Load some images first.", true);
+
   const tips = state.tips[img.name] || [];
+  if (!tips.length) {
+    return expandHint(
+      "No tips on this frame yet. Click them here first — this frame should be "
+      + "the last of the visit, with every dart in.", true);
+  }
+
   const back = parseInt($("burstBack").value, 10);
-  if (!tips.length || !Number.isFinite(back) || back < 1) return;
+  if (!Number.isFinite(back) || back < 1) {
+    return expandHint('"preceding frames" needs to be a number of 1 or more.', true);
+  }
+
+  const written = [];
   for (let k = 1; k <= back; k++) {
     const prev = state.images[state.index - k];
     if (!prev) break;
     state.tips[prev.name] = tips.slice(0, Math.max(0, tips.length - k));
+    written.push(`${prev.name}: ${state.tips[prev.name].length}`);
   }
   renderFiles(); updateStatus();
+
+  if (!written.length) {
+    return expandHint(
+      "Nothing before this frame to expand onto — it is the first image loaded.",
+      true);
+  }
+  expandHint(
+    `Wrote ${written.length} frame(s), counting back from ${tips.length} darts: `
+    + written.join(", ") + " darts.");
 };
 
 function updateStatus() {
