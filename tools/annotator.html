@@ -86,6 +86,7 @@
     </div>
     <div class="hint" id="expandHint"></div>
     <div class="hint">Click the tips on the <em>last</em> frame of a visit in throw order, then expand backwards over the frames that preceded it.</div>
+    <div class="hint" style="margin-top:6px"><b>Keys</b> &nbsp;n / p next and previous frame &nbsp;&middot;&nbsp; e expand &nbsp;&middot;&nbsp; z undo &nbsp;&middot;&nbsp; arrows nudge the last point, shift for five</div>
     <hr>
     <button id="export" class="primary">Export JSONL</button>
     <div class="hint" id="exportHint"></div>
@@ -123,7 +124,17 @@ function renderFiles() {
     row.innerHTML = `<span>${img.name}</span><span class="badge">${tips ? tips.length + "d" : ""}</span>`;
     row.onclick = () => { state.index = i; renderFiles(); draw(); };
     box.appendChild(row);
+    // A session is a couple of hundred frames, so the selected one is usually
+    // scrolled out of sight -- and with the keyboard driving the selection, out
+    // of sight means there is nothing on screen saying where you are.
+    if (i === state.index) row.scrollIntoView({ block: "nearest" });
   });
+}
+
+function step(delta) {
+  if (!state.images.length) return;
+  state.index = Math.min(state.images.length - 1, Math.max(0, state.index + delta));
+  renderFiles(); draw(); updateStatus();
 }
 
 function current() { return state.index >= 0 ? state.images[state.index] : null; }
@@ -259,14 +270,26 @@ function nudge(dx, dy) {
   drawLoupe(list[index][0] * img.w, list[index][1] * img.h);
 }
 
+// The tip pass is one loop repeated once per visit: reach the last frame,
+// click three tips, expand. Forty-six times for a session of this size. Every
+// part of it that needed the mouse to leave the board is on a key.
 window.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.metaKey || e.ctrlKey || e.altKey) return;
+
   const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0],
                   ArrowUp: [0, -1], ArrowDown: [0, 1] };
-  if (!(e.key in moves) || e.target.tagName === "INPUT") return;
-  if (!lastPoint()) return;
-  e.preventDefault();
-  const step = e.shiftKey ? 5 : 1;
-  nudge(moves[e.key][0] * step, moves[e.key][1] * step);
+  if (e.key in moves) {
+    if (!lastPoint()) return;
+    e.preventDefault();
+    const size = e.shiftKey ? 5 : 1;
+    return nudge(moves[e.key][0] * size, moves[e.key][1] * size);
+  }
+
+  const key = e.key.toLowerCase();
+  if (key === "n" || key === "]") { e.preventDefault(); return step(1); }
+  if (key === "p" || key === "[") { e.preventDefault(); return step(-1); }
+  if (key === "e") { e.preventDefault(); return $("expand").click(); }
+  if (key === "z") { e.preventDefault(); return $("undo").click(); }
 });
 
 // Order matters in exactly one place: burst expansion takes the *first* k tips,

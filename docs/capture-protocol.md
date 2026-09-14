@@ -332,6 +332,12 @@ Open `tools/annotator.html` in any browser — no install.
 
    And the true order is in the frames themselves: the 1-dart frame *is* dart
    one. Nothing has to be remembered.
+
+   The tip pass is this loop repeated once per visit — forty-six times for a
+   session of 184 stills — so every part of it that would send the mouse away
+   from the board is on a key: **n** and **p** step between frames, **e**
+   expands, **z** undoes a point, and the arrows nudge. The selected frame
+   scrolls itself into view, which matters once a list is hundreds long.
 5. Export JSONL. It matches the same contract the synthetic generator emits, so
    real and synthetic data are interchangeable inputs to the same pipeline.
 
