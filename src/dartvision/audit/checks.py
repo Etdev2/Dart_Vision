@@ -438,6 +438,36 @@ def _percentile(ordered: Sequence[float], percent: float) -> float:
 # Running the lot
 # --------------------------------------------------------------------------
 
+def locate_image(annotation, root: Path) -> Path:
+    """Where an annotation's image actually sits under ``root``.
+
+    Two layouts exist and both are legitimate. The renderer writes a flat
+    directory of ``setup_session_img-0001.jpg``, because ids are hierarchical
+    and file systems are not. A capture session is a *folder* of plain
+    ``frame-0001.jpg``, because that is what came off the phone and what the
+    annotator was pointed at.
+
+    Resolving only the first made the second look like missing data -- which is
+    the failure ``image_filename`` documents itself as existing to prevent, and
+    it arrived anyway by the other route. So the candidates are tried in turn
+    and the first that exists wins; the flat form stays first so nothing about
+    synthetic corpora changes.
+    """
+    identifier = annotation.image_id
+    source = (annotation.meta or {}).get("source_file")
+    candidates = [
+        root / image_filename(identifier),          # renderer: flat, underscored
+        root / identifier,                          # id used as a path, verbatim
+        root / f"{identifier}.jpg",                 # ...needing the suffix
+    ]
+    if source:
+        candidates.append(root / source)            # capture: a folder of stills
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
 def audit(
     annotations: Sequence[Annotation],
     image_root: str | Path | None = None,
@@ -454,7 +484,7 @@ def audit(
 
         root = Path(image_root)
         hashes = hash_images(
-            {a.image_id: root / image_filename(a.image_id) for a in annotations}
+            {a.image_id: locate_image(a, root) for a in annotations}
         )
         unhashed = len(annotations) - len(hashes)
         pairs = near_duplicate_pairs(hashes, threshold=hash_threshold)

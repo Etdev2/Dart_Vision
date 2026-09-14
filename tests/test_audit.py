@@ -516,3 +516,88 @@ def test_a_split_construction_error_is_reported_without_an_assignment():
     result = check_split_grouping(corpus(), None, error="needs three setups")
     assert result.status == FAIL
     assert result.summary == "needs three setups"
+
+
+# --------------------------------------------------------------------------
+# Finding the images: two layouts, both legitimate
+# --------------------------------------------------------------------------
+
+def relabel(annotation, image_id, source_file=None):
+    """The same annotation under a different id and file, for path tests."""
+    meta = dict(annotation.meta or {})
+    if source_file:
+        meta["source_file"] = source_file
+    return Annotation(
+        image_id=image_id, setup_id=annotation.setup_id,
+        session_id=annotation.session_id, origin=annotation.origin,
+        landmarks=annotation.landmarks, tips=annotation.tips,
+        image_size=annotation.image_size, meta=meta,
+    )
+
+
+def test_a_rendered_corpus_is_found_by_its_flat_name(tmp_path):
+    from dartvision.audit.checks import locate_image
+
+    wanted = tmp_path / "garage_a_img-0001.jpg"
+    wanted.write_bytes(b"")
+    annotation = relabel(corpus(sessions=1, per_session=1)[0], "garage/a/img-0001")
+
+    assert locate_image(annotation, tmp_path) == wanted
+
+
+def test_a_capture_session_is_found_by_its_source_file(tmp_path):
+    """A folder of frame-0001.jpg off a phone, which is what the annotator is
+    pointed at — and which resolving only the flat form called missing data."""
+    from dartvision.audit.checks import locate_image
+
+    wanted = tmp_path / "frame-0001.jpg"
+    wanted.write_bytes(b"")
+    annotation = relabel(corpus(sessions=1, per_session=1)[0],
+                         "garage/t2-0658/frame-0001.jpg", "frame-0001.jpg")
+
+    assert locate_image(annotation, tmp_path) == wanted
+
+
+def test_the_flat_form_still_wins_when_both_exist(tmp_path):
+    """Nothing about synthetic corpora changes."""
+    from dartvision.audit.checks import locate_image
+
+    flat = tmp_path / "garage_a_frame-0001.jpg.jpg"
+    flat.write_bytes(b"")
+    (tmp_path / "frame-0001.jpg").write_bytes(b"")
+    annotation = relabel(corpus(sessions=1, per_session=1)[0],
+                         "garage/a/frame-0001.jpg", "frame-0001.jpg")
+
+    assert locate_image(annotation, tmp_path) == flat
+
+
+def test_a_missing_image_reports_the_place_it_was_expected(tmp_path):
+    from dartvision.audit.checks import locate_image
+
+    annotation = relabel(corpus(sessions=1, per_session=1)[0], "garage/a/img-0001")
+    found = locate_image(annotation, tmp_path)
+
+    assert found == tmp_path / "garage_a_img-0001.jpg"
+    assert not found.exists()
+
+
+def test_the_audit_hashes_a_capture_folder_end_to_end(tmp_path):
+    """The whole point: a manifest the annotator wrote, beside the stills the
+    extractor wrote, audits with its duplicate checks actually running."""
+    from PIL import Image
+
+    annotations = []
+    for index, base in enumerate(corpus(sessions=1, per_session=4), start=1):
+        name = f"frame-{index:04d}.jpg"
+        Image.fromarray(
+            np.random.default_rng(index).integers(0, 255, (48, 48), dtype=np.uint8)
+        ).save(tmp_path / name)
+        annotations.append(relabel(base, f"garage/t2-0658/{name}", name))
+
+    report = audit(annotations, image_root=tmp_path)
+    duplicates = next(c for c in report.checks
+                      if c.name == "cross_session_duplicates")
+
+    assert duplicates.status != SKIPPED, (
+        "with every image found, the duplicate checks must actually run"
+    )
