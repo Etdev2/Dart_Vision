@@ -37,7 +37,7 @@
   #stage { position:relative; }
   canvas { max-width:100%; border:1px solid var(--line); border-radius:8px;
            cursor:crosshair; display:block; background:var(--panel); }
-  #loupe { position:absolute; right:8px; top:8px; width:150px; height:150px;
+  #loupe { position:absolute; right:8px; top:8px; width:240px; height:240px;
            border:2px solid var(--accent); border-radius:8px; display:none;
            pointer-events:none; background:var(--panel); }
   .row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
@@ -59,8 +59,8 @@
   <div class="panel" id="files"><div class="hint">Load images. Sorted by filename, which should be capture order.</div></div>
 
   <div class="panel" id="stage">
-    <canvas id="canvas" width="900" height="640"></canvas>
-    <canvas id="loupe" width="150" height="150"></canvas>
+    <canvas id="canvas" width="860" height="1000"></canvas>
+    <canvas id="loupe" width="240" height="240"></canvas>
   </div>
 
   <div class="panel">
@@ -157,15 +157,50 @@ canvas.addEventListener("mousemove", e => {
   const cy = (e.clientY - r.top) * canvas.height / r.height;
   const { scale, ox, oy } = state.view;
   const ix = (cx - ox) / scale, iy = (cy - oy) / scale;
-  const zoom = 6, half = 150 / (2 * zoom);
+  drawLoupe(ix, iy);
+});
+
+// The magnifier shows LOUPE_SPAN source pixels across, not a fixed zoom factor.
+// A double ring is about 19 pixels wide on a well-framed 1080-wide photograph,
+// so a window of 25 was one ring and no context: the crossing being aimed at
+// was off the edge of the view that existed to find it.
+const LOUPE_SIZE = 240, LOUPE_SPAN = 60;
+
+function drawLoupe(ix, iy) {
+  const img = current(); if (!img) return;
+  const half = LOUPE_SPAN / 2;
+
+  // Parked in the corner furthest from the point being placed. Fixed in one
+  // corner it covers a quarter of the image, and on a portrait photograph of a
+  // board that quarter contains one of the eight landmarks -- the magnifier
+  // hiding the thing it exists to magnify.
+  const { scale, ox, oy } = state.view;
+  const cx = ox + ix * scale, cy = oy + iy * scale;
+  loupe.style.left = cx > canvas.width / 2 ? "8px" : "auto";
+  loupe.style.right = cx > canvas.width / 2 ? "auto" : "8px";
+  loupe.style.top = cy > canvas.height / 2 ? "8px" : "auto";
+  loupe.style.bottom = cy > canvas.height / 2 ? "auto" : "8px";
+
   loupe.style.display = "block";
   lctx.imageSmoothingEnabled = false;
-  lctx.clearRect(0, 0, 150, 150);
-  lctx.drawImage(img.bitmap, ix - half, iy - half, half * 2, half * 2, 0, 0, 150, 150);
-  lctx.strokeStyle = "#2563eb"; lctx.lineWidth = 1;
-  lctx.beginPath(); lctx.moveTo(75, 60); lctx.lineTo(75, 90);
-  lctx.moveTo(60, 75); lctx.lineTo(90, 75); lctx.stroke();
-});
+  lctx.clearRect(0, 0, LOUPE_SIZE, LOUPE_SIZE);
+  lctx.drawImage(img.bitmap, ix - half, iy - half, LOUPE_SPAN, LOUPE_SPAN,
+                 0, 0, LOUPE_SIZE, LOUPE_SIZE);
+
+  const mid = LOUPE_SIZE / 2, arm = LOUPE_SIZE / 6;
+  // Drawn twice, dark under light, so the crosshair stays visible over both the
+  // black beds and the cream ones -- a single colour disappears into one of them
+  // exactly where the wires it is aiming at happen to be.
+  for (const [colour, width] of [["#000", 3], ["#fff", 1]]) {
+    lctx.strokeStyle = colour; lctx.lineWidth = width;
+    lctx.beginPath();
+    lctx.moveTo(mid, mid - arm); lctx.lineTo(mid, mid - 5);
+    lctx.moveTo(mid, mid + 5); lctx.lineTo(mid, mid + arm);
+    lctx.moveTo(mid - arm, mid); lctx.lineTo(mid - 5, mid);
+    lctx.moveTo(mid + 5, mid); lctx.lineTo(mid + arm, mid);
+    lctx.stroke();
+  }
+}
 canvas.addEventListener("mouseleave", () => { loupe.style.display = "none"; });
 
 canvas.addEventListener("click", e => {
@@ -189,16 +224,64 @@ canvas.addEventListener("click", e => {
   draw(); renderFiles(); updateStatus();
 });
 
+// --- placing a point exactly -------------------------------------------
+//
+// A click can only be as precise as the canvas is large, and a 1080x1920
+// photograph shown in a canvas that has to fit on a screen is displayed at
+// roughly half size -- so every click lands within two source pixels of where
+// it was aimed, on a task whose whole point is sub-millimetre placement. The
+// magnifier shows the error and cannot fix it: what is clicked is the canvas.
+//
+// So the keyboard places the point and the mouse only gets it close. Arrows
+// move the last point one *source* pixel, which is the finest move the image
+// admits, and the magnifier follows it rather than the cursor.
+
+function lastPoint() {
+  const img = current(); if (!img) return null;
+  const list = state.mode === "landmarks"
+    ? state.landmarks : (state.tips[img.name] || []);
+  return list.length ? { list, index: list.length - 1, img } : null;
+}
+
+function nudge(dx, dy) {
+  const held = lastPoint(); if (!held) return;
+  const { list, index, img } = held;
+  const [nx, ny] = list[index];
+  list[index] = [
+    Math.min(1, Math.max(0, nx + dx / img.w)),
+    Math.min(1, Math.max(0, ny + dy / img.h)),
+  ];
+  draw();
+  drawLoupe(list[index][0] * img.w, list[index][1] * img.h);
+}
+
+window.addEventListener("keydown", e => {
+  const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+                  ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  if (!(e.key in moves) || e.target.tagName === "INPUT") return;
+  if (!lastPoint()) return;
+  e.preventDefault();
+  const step = e.shiftKey ? 5 : 1;
+  nudge(moves[e.key][0] * step, moves[e.key][1] * step);
+});
+
 function renderPoints() {
   const img = current();
   const list = state.mode === "landmarks" ? state.landmarks : (img ? state.tips[img.name] || [] : []);
   $("points").innerHTML = list.map((p, i) => {
     const name = state.mode === "landmarks" ? (LANDMARK_NAMES[i] || "extra") : "tip " + (i + 1);
-    return `<li>${name} &mdash; ${p[0].toFixed(4)}, ${p[1].toFixed(4)}</li>`;
+    // Shown in source pixels as well as fractions: a pixel is the unit the
+    // arrow keys move in, so it is the unit worth reading back.
+    const px = img ? ` &nbsp;(${Math.round(p[0] * img.w)}, ${Math.round(p[1] * img.h)} px)` : "";
+    const last = i === list.length - 1 ? ' style="font-weight:650"' : "";
+    return `<li${last}>${name} &mdash; ${p[0].toFixed(4)}, ${p[1].toFixed(4)}${px}</li>`;
   }).join("");
-  $("modeHelp").textContent = state.mode === "landmarks"
+  const nudgeHint = list.length
+    ? " Arrow keys move the last point one pixel, shift for five — the magnifier follows it."
+    : "";
+  $("modeHelp").textContent = (state.mode === "landmarks"
     ? `Click the 8 wire intersections in order — see docs/landmarks.svg for which. Annotated once; applies to every frame in this session. Next: ${LANDMARK_NAMES[state.landmarks.length] || "done"}`
-    : "Click up to 3 tips in throw order on the final frame of a visit.";
+    : "Click up to 3 tips in throw order on the final frame of a visit.") + nudgeHint;
 }
 
 for (const [id, mode] of [["modeLandmarks", "landmarks"], ["modeTips", "tips"]]) {

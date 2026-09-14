@@ -329,6 +329,14 @@ A magnifier follows the cursor because the precision that matters here is
 sub-millimetre on the board (#15). Clicking by eye at full-frame zoom throws
 away the accuracy the model is trying to achieve.
 
+**The click gets the point close; the arrow keys place it.** A canvas has to
+fit on a screen, so a 1080×1920 photograph is shown at about half size and every
+click lands within a couple of source pixels of where it was aimed — on a task
+whose whole point is sub-millimetre placement. Arrow keys move the last point
+one *source* pixel, shift moves five, and the magnifier follows the point rather
+than the cursor while they do. The point list reads back both the fraction and
+the pixel, because the pixel is the unit the keys move in.
+
 The header shows clicks spent against clicks if every frame were labelled
 independently. That ratio is why this is a weekend rather than a month.
 
