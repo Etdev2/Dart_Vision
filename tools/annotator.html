@@ -55,7 +55,10 @@
   <label>setup <input type="text" id="setup" value="garage" spellcheck="false"></label>
   <label>session <input type="text" id="session" value="garage/2026-01-01-a" spellcheck="false"></label>
   <input type="file" id="load" accept="image/*" multiple>
+  <label class="hint" title="carry on from a manifest exported earlier">resume
+    <input type="file" id="resume" accept=".jsonl,application/x-ndjson"></label>
   <span class="hint" id="status">no images loaded</span>
+  <button id="forget" title="delete the saved work for this session id">Discard saved</button>
 </header>
 
 <main>
@@ -85,6 +88,7 @@
       <button id="expand">Expand burst</button>
     </div>
     <div class="hint" id="expandHint"></div>
+    <div class="hint" id="savedHint" style="margin-top:6px"></div>
     <div class="hint">Click the tips on the <em>last</em> frame of a visit in throw order, then expand backwards over the frames that preceded it.</div>
     <div class="hint" style="margin-top:6px"><b>Keys</b> &nbsp;n / p next and previous frame &nbsp;&middot;&nbsp; e expand &nbsp;&middot;&nbsp; z undo &nbsp;&middot;&nbsp; arrows nudge the last point, shift for five</div>
     <hr>
@@ -99,6 +103,70 @@ const LANDMARK_NAMES = ["cal_1 (9 deg, 13|6 wire)","cal_2 (99 deg, 20|5)","cal_3
   "cal_7 treble (189 deg)","cal_8 treble (279 deg)"];
 
 const state = { images: [], index: -1, mode: "landmarks", landmarks: [], tips: {}, bursts: {} };
+
+// --- keeping the work ---------------------------------------------------
+//
+// A session is forty-six visits of clicking, and until now a closed tab threw
+// all of it away: nothing was written anywhere until Export, and there was no
+// way back in afterwards. Annotation is the one part of this project that
+// cannot be re-run by machine, so it is the one part that must survive a
+// browser.
+//
+// Stored per session id rather than in one slot, because every session folder
+// contains a frame-0001.jpg and tips are keyed by filename -- one shared slot
+// would silently attach one session's darts to another's images.
+
+const STORE = "dartvision.annotator:";
+const LAST = "dartvision.annotator.last";
+
+function sessionKey() { return STORE + ($("session").value.trim() || "unnamed"); }
+
+function save() {
+  try {
+    localStorage.setItem(sessionKey(), JSON.stringify({
+      setup: $("setup").value, session: $("session").value,
+      landmarks: state.landmarks, tips: state.tips, savedAt: Date.now(),
+    }));
+    localStorage.setItem(LAST, $("session").value);
+  } catch (err) {
+    $("savedHint").textContent = "Could not save to this browser: " + err.message;
+    $("savedHint").className = "warn";
+  }
+}
+
+function restore(quiet) {
+  let held = null;
+  try { held = JSON.parse(localStorage.getItem(sessionKey()) || "null"); }
+  catch (err) { held = null; }
+  if (!held) {
+    // Nothing stored under this id. Two situations arrive here and they want
+    // opposite things: a session being *named* after the clicking started, and
+    // a move to a genuinely different session. Keeping the work covers the
+    // first; the second is covered because a session that has been worked on
+    // *has* stored work, so it lands in the branch below and replaces rather
+    // than inherits. Only a never-seen id can carry work into itself, which is
+    // a rename by any other name.
+    const carried = state.landmarks.length + Object.keys(state.tips).length;
+    $("savedHint").textContent = carried
+      ? "No saved work under this session id — the current work carries over to it."
+      : "Nothing saved under this session id yet.";
+    $("savedHint").className = "hint";
+    if (carried) save();
+    return false;
+  }
+  state.landmarks = held.landmarks || [];
+  state.tips = held.tips || {};
+  if (held.setup) $("setup").value = held.setup;
+
+  const frames = Object.keys(state.tips).length;
+  const when = new Date(held.savedAt || Date.now()).toLocaleString();
+  $("savedHint").textContent =
+    `Restored ${state.landmarks.length}/8 landmarks and ${frames} frame(s) of tips, saved ${when}. `
+    + "Load the same images to carry on.";
+  $("savedHint").className = "hint";
+  draw(); renderFiles(); updateStatus();
+  return true;
+}
 const $ = id => document.getElementById(id);
 const canvas = $("canvas"), ctx = canvas.getContext("2d");
 const loupe = $("loupe"), lctx = loupe.getContext("2d");
@@ -413,7 +481,77 @@ function updateStatus() {
     ? `${spent} clicks spent vs ${naive} labelling every frame independently`
     : "";
   $("status").className = state.landmarks.length < 4 && state.images.length ? "warn" : "hint";
+  // Every mutation in this file already ends by calling updateStatus, so this
+  // is the one place a save belongs: anywhere else and the next handler added
+  // is the one that silently does not persist.
+  if (state.landmarks.length || Object.keys(state.tips).length) save();
 }
+
+$("session").addEventListener("change", () => restore(true));
+
+$("forget").onclick = () => {
+  if (!confirm("Delete the saved landmarks and tips for this session id? "
+               + "The images are untouched; only the clicking is lost.")) return;
+  try { localStorage.removeItem(sessionKey()); } catch (err) {}
+  state.landmarks = []; state.tips = {};
+  $("savedHint").textContent = "Saved work discarded.";
+  draw(); renderFiles(); updateStatus();
+};
+
+// Work carried over from a previous sitting, before any images are loaded:
+// tips are keyed by filename, so re-picking the same folder reattaches them.
+try {
+  const last = localStorage.getItem(LAST);
+  if (last) { $("session").value = last; restore(true); }
+} catch (err) {}
+
+// Reading an exported manifest back in. Export is the only thing this tool
+// writes to disk, so without this it is a one-way door: work could be saved and
+// never resumed, and a sitting that ended had to end for good. Keyed on the
+// filename each row came from, so the images can be re-picked in any order.
+$("resume").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  let rows;
+  try {
+    rows = (await file.text()).split("\n").filter(Boolean).map(JSON.parse);
+  } catch (err) {
+    $("savedHint").textContent = "That file is not a manifest: " + err.message;
+    $("savedHint").className = "warn";
+    return;
+  }
+  if (!rows.length) {
+    $("savedHint").textContent = "That manifest is empty.";
+    $("savedHint").className = "warn";
+    return;
+  }
+
+  const first = rows[0];
+  if (first.setup_id) $("setup").value = first.setup_id;
+  if (first.session_id) $("session").value = first.session_id;
+  state.landmarks = (first.landmarks || []).filter(Boolean);
+
+  // An empty tip list is a label, not a gap: it is what an empty board looks
+  // like, and expansion writes it deliberately. Dropping those on the way back
+  // in would make finished frames read as untouched and invite redoing them.
+  state.tips = {};
+  let darts = 0;
+  for (const row of rows) {
+    const name = (row.meta && row.meta.source_file)
+      || String(row.image_id || "").split("/").pop();
+    if (name && Array.isArray(row.tips)) {
+      state.tips[name] = row.tips;
+      darts += row.tips.length;
+    }
+  }
+  save();
+  $("savedHint").textContent =
+    `Resumed ${rows.length} row(s): ${state.landmarks.length}/8 landmarks, `
+    + `${Object.keys(state.tips).length} frame(s) covering ${darts} dart(s). `
+    + "Load the images to carry on.";
+  $("savedHint").className = "hint";
+  draw(); renderFiles(); updateStatus();
+});
 
 $("export").onclick = () => {
   if (state.landmarks.length < 4) { alert("At least 4 landmarks are needed, or no frame can be scored."); return; }

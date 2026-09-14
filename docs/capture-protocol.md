@@ -341,6 +341,19 @@ Open `tools/annotator.html` in any browser — no install.
 5. Export JSONL. It matches the same contract the synthetic generator emits, so
    real and synthetic data are interchangeable inputs to the same pipeline.
 
+**The work survives the browser.** Landmarks and tips are saved as you click,
+keyed by session id, and come back when the page is reopened — load the same
+images and they reattach by filename. A session id that has never been used
+inherits the work in progress, which is what naming a session partway through
+means; one that has been used loads its own, which is what switching between
+sessions means. "Discard saved" deletes the stored clicking for the current id
+and nothing else.
+
+An exported manifest can also be read back in through **resume**, which is what
+makes Export a save-point rather than a one-way door. Empty tip lists come back
+too: an empty board is a label, not a gap, and dropping those would make
+finished frames read as untouched.
+
 A magnifier follows the cursor because the precision that matters here is
 sub-millimetre on the board (#15). Clicking by eye at full-frame zoom throws
 away the accuracy the model is trying to achieve.
