@@ -523,13 +523,19 @@ def test_a_split_construction_error_is_reported_without_an_assignment():
 # --------------------------------------------------------------------------
 
 def relabel(annotation, image_id, source_file=None):
-    """The same annotation under a different id and file, for path tests."""
+    """The same annotation under a different id and file, for path tests.
+
+    The session is taken from the id rather than carried over, because the
+    schema check requires them to agree — and a fixture that disagrees reports
+    a failure of its own making on top of whatever is being tested.
+    """
     meta = dict(annotation.meta or {})
     if source_file:
         meta["source_file"] = source_file
+    session = image_id.rsplit("/", 1)[0]
     return Annotation(
-        image_id=image_id, setup_id=annotation.setup_id,
-        session_id=annotation.session_id, origin=annotation.origin,
+        image_id=image_id, setup_id=session.split("/")[0],
+        session_id=session, origin=annotation.origin,
         landmarks=annotation.landmarks, tips=annotation.tips,
         image_size=annotation.image_size, meta=meta,
     )
@@ -601,3 +607,61 @@ def test_the_audit_hashes_a_capture_folder_end_to_end(tmp_path):
     assert duplicates.status != SKIPPED, (
         "with every image found, the duplicate checks must actually run"
     )
+
+
+def test_unreadable_images_skip_the_checks_that_need_them(tmp_path):
+    """The failure that reached a real corpus: every image unopenable, and the
+    checks that depend on opening them reported results anyway — one passing on
+    an empty comparison, the other calling an evening's labelling worthless."""
+    annotations = [
+        relabel(a, f"garage/t2-0658/frame-{i:04d}.jpg", f"frame-{i:04d}.jpg")
+        for i, a in enumerate(corpus(sessions=1, per_session=8), start=1)
+    ]
+    report = audit(annotations, image_root=tmp_path)     # nothing resolves here
+    by_name = {c.name: c for c in report.checks}
+
+    assert by_name["cross_session_duplicates"].status == SKIPPED
+    assert by_name["effective_size"].status == SKIPPED
+    summary = by_name["effective_size"].summary
+    assert "none of the 8 images" in summary and "--image-root" in summary
+    assert "0 images' worth" not in summary, (
+        "a corpus that was never read must not be described as carrying nothing"
+    )
+
+
+def test_a_readable_corpus_still_gets_a_verdict(tmp_path):
+    """The skip must be about unreadable images, not about capture layouts."""
+    from PIL import Image
+
+    annotations = []
+    for index, base in enumerate(corpus(sessions=1, per_session=6), start=1):
+        name = f"frame-{index:04d}.jpg"
+        Image.fromarray(
+            np.random.default_rng(index).integers(0, 255, (64, 64), dtype=np.uint8)
+        ).save(tmp_path / name)
+        annotations.append(relabel(base, f"garage/t2-0658/{name}", name))
+
+    by_name = {c.name: c for c in audit(annotations, image_root=tmp_path).checks}
+
+    assert by_name["effective_size"].status in (PASS, WARN)
+    assert by_name["cross_session_duplicates"].status in (PASS, WARN, FAIL)
+
+
+def test_some_unreadable_images_are_reported_rather_than_ignored(tmp_path):
+    """Half a comparison is not a clean bill of health."""
+    from PIL import Image
+
+    annotations = []
+    for index, base in enumerate(corpus(sessions=1, per_session=6), start=1):
+        name = f"frame-{index:04d}.jpg"
+        if index % 2:                              # only the odd ones exist
+            Image.fromarray(
+                np.random.default_rng(index).integers(0, 255, (64, 64), dtype=np.uint8)
+            ).save(tmp_path / name)
+        annotations.append(relabel(base, f"garage/t2-0658/{name}", name))
+
+    check = {c.name: c for c in audit(annotations, image_root=tmp_path).checks}[
+        "cross_session_duplicates"]
+
+    assert check.status == WARN
+    assert "could not be opened" in check.summary

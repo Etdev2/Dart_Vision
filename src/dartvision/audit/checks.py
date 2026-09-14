@@ -231,6 +231,18 @@ def check_cross_session_duplicates(
             "cross_session_duplicates", SKIPPED,
             "no images available to hash; pass --image-root",
         )
+    # Every image unreadable produces an empty pair list, which is
+    # indistinguishable from a clean corpus by the test below -- and the check
+    # would then pass, loudly, having examined nothing. A check that could not
+    # look must say so rather than report what it did not see.
+    if annotations and unhashed >= len(annotations):
+        return CheckResult(
+            "cross_session_duplicates", SKIPPED,
+            f"none of the {len(annotations)} images could be opened under "
+            "--image-root; nothing was compared. Check the path points at the "
+            "folder holding the stills.",
+            {"unhashed_images": unhashed},
+        )
     session_of = {a.image_id: a.session_id for a in annotations}
     crossing = [
         p for p in pairs
@@ -258,9 +270,11 @@ def check_cross_session_duplicates(
             "sessions into one group before splitting",
             details,
         )
+    missed = (f", though {unhashed} image(s) could not be opened and were not "
+              "compared") if unhashed else ""
     return CheckResult(
-        "cross_session_duplicates", PASS,
-        "no near-duplicate frame spans two sessions", details,
+        "cross_session_duplicates", WARN if unhashed else PASS,
+        f"no near-duplicate frame spans two sessions{missed}", details,
     )
 
 
@@ -269,7 +283,8 @@ def check_cross_session_duplicates(
 # --------------------------------------------------------------------------
 
 def check_within_session_duplication(
-    annotations: Sequence[Annotation], clusters, minimum_ratio: float = 0.6
+    annotations: Sequence[Annotation], clusters, minimum_ratio: float = 0.6,
+    unhashed: int = 0,
 ) -> CheckResult:
     """How much of the corpus is distinct. Not a leak -- an inflated epoch.
 
@@ -287,6 +302,18 @@ def check_within_session_duplication(
             "effective_size", SKIPPED,
             "no images available to hash; pass --image-root",
         )
+    # No cluster survives an unreadable corpus, and "carries about 0 images'
+    # worth of information" is then a measurement of the reader rather than of
+    # the data -- phrased as a judgement on work that took an evening.
+    if annotations and unhashed >= len(annotations):
+        return CheckResult(
+            "effective_size", SKIPPED,
+            f"none of the {len(annotations)} images could be opened under "
+            "--image-root, so nothing was measured. Check the path points at "
+            "the folder holding the stills.",
+            {"images": len(annotations), "unhashed_images": unhashed},
+        )
+
     nominal = len(annotations)
     effective = len(clusters)
     ratio = effective / nominal if nominal else 0.0
@@ -495,7 +522,8 @@ def audit(
             check_schema(annotations),
             check_split_grouping(annotations, assignment, split_error),
             check_cross_session_duplicates(annotations, pairs, unhashed),
-            check_within_session_duplication(annotations, clusters),
+            check_within_session_duplication(
+                annotations, clusters, unhashed=unhashed),
             check_darts_per_image(annotations),
             check_margin_distribution(annotations, board),
         )
